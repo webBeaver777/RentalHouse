@@ -1,0 +1,123 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: rent2proof-app
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/var/www/html/docker/entrypoint.sh"]
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+      - node_modules:/var/www/html/node_modules
+    ports:
+      - "7777:80"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - rent2proof
+
+  db:
+    image: postgres:17-alpine
+    container_name: rent2proof-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-rent2proof}
+      POSTGRES_USER: ${DB_USERNAME:-rent2proof}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-rent2proof} -d ${DB_DATABASE:-rent2proof}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rent2proof
+
+  redis:
+    image: redis:7-alpine
+    container_name: rent2proof-redis
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rent2proof
+
+  minio:
+    image: minio/minio
+    container_name: rent2proof-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rent2proof
+
+  minio-init:
+    image: minio/mc
+    container_name: rent2proof-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}
+        mc mb --ignore-existing myminio/$${MINIO_BUCKET}
+        mc anonymous set download myminio/$${MINIO_BUCKET}/public
+        echo "MinIO bucket '$${MINIO_BUCKET}' initialized successfully"
+        exit 0
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      MINIO_BUCKET: ${AWS_BUCKET:-rent2proof}
+    networks:
+      - rent2proof
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: rent2proof-mailpit
+    restart: unless-stopped
+    ports:
+      - "8026:8025"
+      - "1026:1025"
+    networks:
+      - rent2proof
+
+networks:
+  rent2proof:
+    driver: bridge
+
+volumes:
+  pgdata:
+  miniodata:
+  vendor:
+  node_modules:

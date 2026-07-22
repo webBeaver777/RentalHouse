@@ -1,0 +1,1 @@
+{{-- This file is deprecated. Inertia uses app.blade.php and Vue pages. --}}
