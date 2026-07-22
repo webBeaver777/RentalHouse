@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\E2E;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
@@ -11,6 +13,7 @@ use App\Modules\Property\Infrastructure\Models\Property;
 use Database\Seeders\CatalogSeeder;
 use Database\Seeders\LocaleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -43,6 +46,7 @@ class SmokeTest extends TestCase
             'email' => 'jan.kowalski@example.com',
             'password' => 'SecurePassword123!',
             'preferred_locale' => 'pl',
+            'is_admin' => true,
         ]);
 
         $this->assertDatabaseHas('users', [
@@ -128,7 +132,7 @@ class SmokeTest extends TestCase
     public function test_no_pesel_field_exists(): void
     {
         $this->assertFalse(
-            \Illuminate\Support\Facades\Schema::hasColumn('users', 'pesel'),
+            Schema::hasColumn('users', 'pesel'),
             'PESEL field should not exist for RODO compliance'
         );
     }
@@ -138,7 +142,7 @@ class SmokeTest extends TestCase
      */
     public function test_no_global_user_type_exists(): void
     {
-        $columns = \Illuminate\Support\Facades\Schema::getColumnListing('users');
+        $columns = Schema::getColumnListing('users');
 
         $forbiddenColumns = ['user_type', 'type', 'role', 'account_type'];
         foreach ($forbiddenColumns as $column) {

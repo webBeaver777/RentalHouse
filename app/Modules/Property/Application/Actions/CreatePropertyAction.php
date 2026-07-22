@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Property\Application\Actions;
 
 use App\Modules\Property\Application\Data\PropertyData;

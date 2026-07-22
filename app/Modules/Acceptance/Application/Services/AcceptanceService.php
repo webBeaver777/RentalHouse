@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Acceptance\Application\Services;
 
 use App\Modules\Acceptance\Domain\Enums\AcceptanceStatus;
@@ -119,7 +121,7 @@ class AcceptanceService
 
         foreach ($items as $item) {
             foreach ($participants as $participant) {
-                if (!$item->isAcceptedBy($participant)) {
+                if (! $item->isAcceptedBy($participant)) {
                     return false;
                 }
             }
@@ -173,7 +175,7 @@ class AcceptanceService
      */
     private function getProtocolItems(Protocol $protocol): Collection
     {
-        return ProtocolItem::whereHas('room', function ($query) use ($protocol) {
+        return ProtocolItem::whereHas('room', function ($query) use ($protocol): void {
             $query->where('protocol_id', $protocol->id);
         })->get();
     }
@@ -183,6 +185,6 @@ class AcceptanceService
      */
     private function countFullyAcceptedItems(Collection $items): int
     {
-        return $items->filter(fn($item) => $item->isFullyAccepted())->count();
+        return $items->filter(fn ($item) => $item->isFullyAccepted())->count();
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Property;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -22,6 +24,7 @@ class PropertyTest extends TestCase
             'name' => 'Jan Kowalski',
             'email' => 'jan@example.com',
             'password' => 'password123',
+            'is_admin' => true,
         ]);
     }
 
@@ -157,6 +160,7 @@ class PropertyTest extends TestCase
 
     /**
      * Authenticated user can access properties list in Filament.
+     *
      * @group filament
      */
     public function test_authenticated_user_can_access_properties_list(): void

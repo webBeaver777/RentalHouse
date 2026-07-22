@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Protocol;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -16,6 +18,7 @@ class ProtocolTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Property $property;
 
     protected function setUp(): void

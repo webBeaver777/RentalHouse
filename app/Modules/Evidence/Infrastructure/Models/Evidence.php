@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Evidence\Infrastructure\Models;
 
 use App\Modules\Evidence\Domain\Enums\EvidenceType;
@@ -32,6 +34,11 @@ class Evidence extends Model
         'disk',
         'mime_type',
         'size',
+        'hash',
+        'captured_at',
+        'device_info',
+        'server_received_at',
+        'uploaded_from_ip',
         'caption',
         'sort_order',
         'metadata',
@@ -47,9 +54,33 @@ class Evidence extends Model
         return [
             'type' => EvidenceType::class,
             'size' => 'integer',
+            'captured_at' => 'datetime',
+            'server_received_at' => 'datetime',
             'sort_order' => 'integer',
             'metadata' => 'array',
         ];
+    }
+
+    /**
+     * Verify file integrity using stored hash.
+     */
+    public function verifyIntegrity(): bool
+    {
+        if (! $this->hash) {
+            return false;
+        }
+
+        $content = Storage::disk($this->disk)->get($this->path);
+
+        return hash('sha256', $content) === $this->hash;
+    }
+
+    /**
+     * Check if this evidence has forensic data.
+     */
+    public function hasForensicData(): bool
+    {
+        return $this->hash !== null && $this->server_received_at !== null;
     }
 
     /**
@@ -107,7 +138,7 @@ class Evidence extends Model
             $bytes /= 1024;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 
     /**
@@ -139,7 +170,7 @@ class Evidence extends Model
      */
     protected static function booted(): void
     {
-        static::deleting(function (Evidence $evidence) {
+        static::deleting(function (Evidence $evidence): void {
             if ($evidence->isForceDeleting()) {
                 Storage::disk($evidence->disk)->delete($evidence->path);
             }
@@ -168,6 +199,7 @@ class Evidence extends Model
     public function scopeForProtocol($query, Protocol|string $protocol)
     {
         $protocolId = $protocol instanceof Protocol ? $protocol->id : $protocol;
+
         return $query->where('protocol_id', $protocolId);
     }
 }

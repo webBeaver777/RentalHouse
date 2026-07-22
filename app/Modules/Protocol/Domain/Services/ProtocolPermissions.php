@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Protocol\Domain\Services;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -61,7 +63,7 @@ class ProtocolPermissions
      */
     public function canEdit(): bool
     {
-        if (!$this->isParticipant()) {
+        if (! $this->isParticipant()) {
             return false;
         }
 
@@ -113,7 +115,7 @@ class ProtocolPermissions
      */
     public function canSign(): bool
     {
-        if (!$this->isParticipant()) {
+        if (! $this->isParticipant()) {
             return false;
         }
 
@@ -132,7 +134,7 @@ class ProtocolPermissions
      */
     public function canCancel(): bool
     {
-        if (!$this->isParticipant()) {
+        if (! $this->isParticipant()) {
             return false;
         }
 

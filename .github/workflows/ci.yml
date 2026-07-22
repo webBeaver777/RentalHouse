@@ -102,13 +102,33 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          tools: phpstan
 
-      - name: Install dependencies
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist
+
+      - name: Install NPM dependencies
+        run: npm ci
 
       - name: Check PHP syntax
         run: find app tests -name "*.php" -print0 | xargs -0 -n1 php -l
+
+      - name: Run Pint (code style)
+        run: ./vendor/bin/pint --test
+
+      - name: Run PHPStan (static analysis)
+        run: ./vendor/bin/phpstan analyse --memory-limit=512M
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+      - name: Run Prettier check
+        run: npm run format:check --if-present
 
   docker:
     runs-on: ubuntu-latest

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Property\Infrastructure\Models;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -46,13 +48,13 @@ class Property extends Model
      */
     public function getFullAddressAttribute(): string
     {
-        $address = $this->street . ' ' . $this->building_number;
+        $address = $this->street.' '.$this->building_number;
 
         if ($this->apartment_number) {
-            $address .= '/' . $this->apartment_number;
+            $address .= '/'.$this->apartment_number;
         }
 
-        $address .= ', ' . $this->postal_code . ' ' . $this->city;
+        $address .= ', '.$this->postal_code.' '.$this->city;
 
         return $address;
     }

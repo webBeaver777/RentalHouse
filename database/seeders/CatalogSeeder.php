@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Protocol\Infrastructure\Models;
 
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;

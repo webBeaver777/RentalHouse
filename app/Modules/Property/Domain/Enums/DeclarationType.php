@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Property\Domain\Enums;
 
 enum DeclarationType: string

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 // This class is deprecated. Use App\Modules\Identity\Infrastructure\Models\User instead.

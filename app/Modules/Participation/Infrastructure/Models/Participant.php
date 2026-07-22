@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Participation\Infrastructure\Models;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -8,6 +10,7 @@ use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Participant extends Model
@@ -62,6 +65,22 @@ class Participant extends Model
     }
 
     /**
+     * Get invitation tokens.
+     */
+    public function invitationTokens(): HasMany
+    {
+        return $this->hasMany(InvitationToken::class);
+    }
+
+    /**
+     * Get active invitation token.
+     */
+    public function activeToken(): ?InvitationToken
+    {
+        return $this->invitationTokens()->valid()->latest()->first();
+    }
+
+    /**
      * Check if this participant is the initiator.
      */
     public function isInitiator(): bool
@@ -74,7 +93,7 @@ class Participant extends Model
      */
     public function isCounterparty(): bool
     {
-        return !$this->is_initiator;
+        return ! $this->is_initiator;
     }
 
     /**

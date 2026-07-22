@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('protocol_items', function (Blueprint $table) {
+        Schema::create('protocol_items', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('protocol_room_id')->constrained('protocol_rooms')->cascadeOnDelete();
             $table->foreignId('catalog_item_id')->constrained('catalog_items')->cascadeOnDelete();

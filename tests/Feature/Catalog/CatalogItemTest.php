@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Catalog;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
@@ -57,7 +59,7 @@ class CatalogItemTest extends TestCase
         $this->assertGreaterThan(0, $rooms->count());
 
         // Check some Polish room names exist
-        $roomNames = $rooms->map(fn($r) => $r->getTranslation('name', 'pl'))->toArray();
+        $roomNames = $rooms->map(fn ($r) => $r->getTranslation('name', 'pl'))->toArray();
         $this->assertContains('Salon', $roomNames);
         $this->assertContains('Kuchnia', $roomNames);
         $this->assertContains('Łazienka', $roomNames);
@@ -73,7 +75,7 @@ class CatalogItemTest extends TestCase
         $this->assertGreaterThan(0, $items->count());
 
         // Check some Polish item names exist
-        $itemNames = $items->map(fn($i) => $i->getTranslation('name', 'pl'))->toArray();
+        $itemNames = $items->map(fn ($i) => $i->getTranslation('name', 'pl'))->toArray();
         $this->assertContains('Ściany', $itemNames);
         $this->assertContains('Podłoga', $itemNames);
     }
@@ -87,7 +89,7 @@ class CatalogItemTest extends TestCase
 
         $this->assertGreaterThan(0, $conditions->count());
 
-        $names = $conditions->map(fn($c) => $c->getTranslation('name', 'pl'))->toArray();
+        $names = $conditions->map(fn ($c) => $c->getTranslation('name', 'pl'))->toArray();
         $this->assertContains('Nowy', $names);
         $this->assertContains('Dobry', $names);
         $this->assertContains('Uszkodzony', $names);
@@ -102,7 +104,7 @@ class CatalogItemTest extends TestCase
 
         $this->assertGreaterThan(0, $defects->count());
 
-        $names = $defects->map(fn($d) => $d->getTranslation('name', 'pl'))->toArray();
+        $names = $defects->map(fn ($d) => $d->getTranslation('name', 'pl'))->toArray();
         $this->assertContains('Zarysowanie', $names);
         $this->assertContains('Pęknięcie', $names);
     }

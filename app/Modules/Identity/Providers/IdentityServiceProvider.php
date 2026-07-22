@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Identity\Providers;
 
 use App\Modules\Identity\Application\Actions\RegisterUserAction;
@@ -14,6 +16,6 @@ class IdentityServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../Infrastructure/Migrations');
+        $this->loadMigrationsFrom(__DIR__.'/../Infrastructure/Migrations');
     }
 }

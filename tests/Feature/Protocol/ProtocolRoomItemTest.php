@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Protocol;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
@@ -20,8 +22,11 @@ class ProtocolRoomItemTest extends TestCase
     use RefreshDatabase;
 
     private Protocol $protocol;
+
     private CatalogItem $roomCatalog;
+
     private CatalogItem $itemCatalog;
+
     private CatalogItem $conditionCatalog;
 
     protected function setUp(): void

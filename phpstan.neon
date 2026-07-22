@@ -1,0 +1,31 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+    level: 5
+    ignoreErrors:
+        # Eloquent model properties - handled by $fillable/$casts
+        - '#Access to an undefined property App\\Modules\\.*\\Infrastructure\\Models\\.*::\$#'
+        - '#Access to an undefined property Illuminate\\Database\\Eloquent\\Model::\$#'
+        # Eloquent relations return types
+        - '#should return App\\Modules\\.*\\Infrastructure\\Models\\.* but returns Illuminate\\Database\\Eloquent\\Model\|null#'
+        # Collection map callbacks
+        - '#Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection.*::map\(\) contains unresolvable type#'
+        - '#Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection.*::map\(\) expects callable#'
+        # HasMany scope methods
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\HasMany::#'
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Model::#'
+        # Filament classes (version compatibility)
+        - '#Call to static method make\(\) on an unknown class Filament\\#'
+        # DomPDF facade
+        - '#Call to static method loadView\(\) on an unknown class Barryvdh\\DomPDF\\Facade\\Pdf#'
+        # Nullsafe on relations (false positive)
+        - '#Using nullsafe property access.*on left side of \?\? is unnecessary#'
+        # SoftDeletes scope on Builder
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Builder.*::withTrashed\(\)#'
+        # Type covariance with auth()->user()
+        - '#expects App\\Modules\\Identity\\Infrastructure\\Models\\User, Illuminate\\Database\\Eloquent\\Model\|null given#'
+    excludePaths:
+        - app/Modules/*/Infrastructure/Migrations/*

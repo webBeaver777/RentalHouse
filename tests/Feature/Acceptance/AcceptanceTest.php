@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Acceptance;
 
 use App\Modules\Acceptance\Application\Services\AcceptanceService;
@@ -25,11 +27,17 @@ class AcceptanceTest extends TestCase
     use RefreshDatabase;
 
     private User $landlord;
+
     private User $tenant;
+
     private Protocol $protocol;
+
     private Participant $landlordParticipant;
+
     private Participant $tenantParticipant;
+
     private ProtocolItem $item;
+
     private AcceptanceService $service;
 
     protected function setUp(): void
@@ -93,7 +101,7 @@ class AcceptanceTest extends TestCase
             'catalog_item_id' => $itemCatalog->id,
         ]);
 
-        $this->service = new AcceptanceService();
+        $this->service = new AcceptanceService;
     }
 
     /**
@@ -237,7 +245,7 @@ class AcceptanceTest extends TestCase
         $acceptances = $this->service->acceptAllItems($this->protocol, $this->tenantParticipant);
 
         $this->assertCount(2, $acceptances);
-        $this->assertTrue($acceptances->every(fn($a) => $a->isAccepted()));
+        $this->assertTrue($acceptances->every(fn ($a) => $a->isAccepted()));
     }
 
     /**

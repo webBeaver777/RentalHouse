@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Participation;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -17,7 +19,9 @@ class ParticipantTest extends TestCase
     use RefreshDatabase;
 
     private User $landlordUser;
+
     private User $tenantUser;
+
     private Protocol $protocol;
 
     protected function setUp(): void

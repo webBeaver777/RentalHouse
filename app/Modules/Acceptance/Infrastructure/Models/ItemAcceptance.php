@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Acceptance\Infrastructure\Models;
 
 use App\Modules\Acceptance\Domain\Enums\AcceptanceStatus;
@@ -176,6 +178,7 @@ class ItemAcceptance extends Model
     public function scopeByProtocol($query, Protocol|string $protocol)
     {
         $protocolId = $protocol instanceof Protocol ? $protocol->id : $protocol;
+
         return $query->where('protocol_id', $protocolId);
     }
 }

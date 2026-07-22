@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Evidence\Application\Services;
 
 use App\Modules\Evidence\Domain\Enums\EvidenceType;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +28,7 @@ class EvidenceUploadService
     }
 
     /**
-     * Upload evidence file.
+     * Upload evidence file with forensic data.
      */
     public function upload(
         UploadedFile $file,
@@ -34,6 +37,8 @@ class EvidenceUploadService
         ?Model $attachTo = null,
         ?string $caption = null,
         ?array $metadata = null,
+        ?string $deviceInfo = null,
+        ?string $clientIp = null,
     ): Evidence {
         $this->validateFile($file);
 
@@ -41,16 +46,34 @@ class EvidenceUploadService
         $filename = $this->generateFilename($file);
         $path = $this->generatePath($protocol, $filename);
 
+        // Read file content for hash calculation
+        $content = file_get_contents($file->getRealPath());
+
+        // Calculate SHA-256 hash for integrity
+        $hash = hash('sha256', $content);
+
         // Store file
-        Storage::disk($this->disk)->put($path, file_get_contents($file->getRealPath()));
+        Storage::disk($this->disk)->put($path, $content);
 
         // Extract image metadata if photo
         $fileMetadata = $metadata ?? [];
+        $capturedAt = null;
+
         if ($type === EvidenceType::PHOTO) {
-            $fileMetadata = array_merge($fileMetadata, $this->extractImageMetadata($file));
+            $imageData = $this->extractImageMetadata($file);
+            $fileMetadata = array_merge($fileMetadata, $imageData);
+
+            // Extract captured_at from EXIF if available
+            if (isset($imageData['exif']['datetime'])) {
+                try {
+                    $capturedAt = Carbon::parse($imageData['exif']['datetime']);
+                } catch (\Exception $e) {
+                    // Ignore parse errors
+                }
+            }
         }
 
-        // Create evidence record
+        // Create evidence record with forensic data
         return Evidence::create([
             'protocol_id' => $protocol->id,
             'evidenceable_type' => $attachTo ? get_class($attachTo) : null,
@@ -63,6 +86,11 @@ class EvidenceUploadService
             'disk' => $this->disk,
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
+            'hash' => $hash,
+            'captured_at' => $capturedAt,
+            'device_info' => $deviceInfo,
+            'server_received_at' => now(),
+            'uploaded_from_ip' => $clientIp,
             'caption' => $caption,
             'metadata' => $fileMetadata ?: null,
         ]);
@@ -100,6 +128,7 @@ class EvidenceUploadService
     {
         if ($forceDelete) {
             Storage::disk($evidence->disk)->delete($evidence->path);
+
             return $evidence->forceDelete();
         }
 
@@ -115,14 +144,14 @@ class EvidenceUploadService
 
         if ($file->getSize() > $maxSize) {
             throw new InvalidArgumentException(
-                "File size exceeds maximum allowed: " . ($maxSize / 1024 / 1024) . "MB"
+                'File size exceeds maximum allowed: '.($maxSize / 1024 / 1024).'MB'
             );
         }
 
         $allowedMimes = $this->getAllowedMimeTypes();
-        if (!in_array($file->getMimeType(), $allowedMimes)) {
+        if (! in_array($file->getMimeType(), $allowedMimes)) {
             throw new InvalidArgumentException(
-                "File type not allowed: " . $file->getMimeType()
+                'File type not allowed: '.$file->getMimeType()
             );
         }
     }
@@ -155,7 +184,8 @@ class EvidenceUploadService
     private function generateFilename(UploadedFile $file): string
     {
         $extension = $file->getClientOriginalExtension();
-        return Str::uuid() . '.' . $extension;
+
+        return Str::uuid().'.'.$extension;
     }
 
     /**
@@ -164,6 +194,7 @@ class EvidenceUploadService
     private function generatePath(Protocol $protocol, string $filename): string
     {
         $date = now()->format('Y/m');
+
         return "protocols/{$protocol->id}/{$date}/{$filename}";
     }
 
@@ -193,14 +224,16 @@ class EvidenceUploadService
                 $metadata['height'] = $imageSize[1];
             }
 
-            $exif = @exif_read_data($file->getRealPath());
-            if ($exif) {
-                $metadata['exif'] = [
-                    'make' => $exif['Make'] ?? null,
-                    'model' => $exif['Model'] ?? null,
-                    'datetime' => $exif['DateTime'] ?? null,
-                    'orientation' => $exif['Orientation'] ?? null,
-                ];
+            if (function_exists('exif_read_data')) {
+                $exif = @exif_read_data($file->getRealPath());
+                if ($exif) {
+                    $metadata['exif'] = [
+                        'make' => $exif['Make'] ?? null,
+                        'model' => $exif['Model'] ?? null,
+                        'datetime' => $exif['DateTime'] ?? null,
+                        'orientation' => $exif['Orientation'] ?? null,
+                    ];
+                }
             }
         } catch (\Exception $e) {
             // Ignore metadata extraction errors
@@ -215,6 +248,7 @@ class EvidenceUploadService
     public function setDisk(string $disk): self
     {
         $this->disk = $disk;
+
         return $this;
     }
 }

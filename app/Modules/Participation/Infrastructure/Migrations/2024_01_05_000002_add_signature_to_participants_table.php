@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('participants', function (Blueprint $table) {
+        Schema::table('participants', function (Blueprint $table): void {
             $table->timestamp('signed_at')->nullable()->after('declined_at');
             $table->text('signature_data')->nullable()->after('signed_at');
         });
@@ -16,7 +18,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('participants', function (Blueprint $table) {
+        Schema::table('participants', function (Blueprint $table): void {
             $table->dropColumn(['signed_at', 'signature_data']);
         });
     }

@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Identity\Infrastructure\Models;
 
+use App\Modules\Participation\Infrastructure\Models\Participant;
+use App\Modules\Property\Infrastructure\Models\Property;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -20,6 +25,7 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'phone',
         'preferred_locale',
+        'is_admin',
     ];
 
     protected $attributes = [
@@ -36,15 +42,19 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean',
         ];
     }
 
     /**
      * Determine if the user can access Filament panel.
+     *
+     * G6 SECURITY: Only admins can access /admin panel.
+     * Without this check, any authenticated user could access admin area.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return true;
+        return $this->is_admin === true;
     }
 
     /**
@@ -53,5 +63,21 @@ class User extends Authenticatable implements FilamentUser
     public function getLocale(): string
     {
         return $this->preferred_locale ?? config('app.locale', 'pl');
+    }
+
+    /**
+     * Get user's properties.
+     */
+    public function properties(): HasMany
+    {
+        return $this->hasMany(Property::class, 'owner_id');
+    }
+
+    /**
+     * Get user's protocol participations.
+     */
+    public function participations(): HasMany
+    {
+        return $this->hasMany(Participant::class);
     }
 }

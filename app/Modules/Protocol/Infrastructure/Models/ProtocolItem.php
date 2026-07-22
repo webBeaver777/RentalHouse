@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Protocol\Infrastructure\Models;
 
 use App\Modules\Acceptance\Infrastructure\Models\ItemAcceptance;
@@ -24,7 +26,12 @@ class ProtocolItem extends Model
         'condition_catalog_item_id',
         'custom_name',
         'quantity',
+        'is_valuable',
+        'requires_serial_plate',
         'condition_notes',
+        'condition_state',
+        'baseline_item_id',
+        'name_snapshot',
         'defects',
         'sort_order',
         'metadata',
@@ -34,10 +41,63 @@ class ProtocolItem extends Model
     {
         return [
             'quantity' => 'integer',
+            'is_valuable' => 'boolean',
+            'requires_serial_plate' => 'boolean',
             'sort_order' => 'integer',
             'defects' => 'array',
+            'name_snapshot' => 'array',
             'metadata' => 'array',
         ];
+    }
+
+    /**
+     * Get the baseline item (for check-out items).
+     */
+    public function baselineItem(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'baseline_item_id');
+    }
+
+    /**
+     * Get check-out items linked to this baseline item.
+     */
+    public function checkoutItems(): HasMany
+    {
+        return $this->hasMany(self::class, 'baseline_item_id');
+    }
+
+    /**
+     * Check if this item requires triple-shot photos.
+     */
+    public function requiresTripleShot(): bool
+    {
+        return $this->is_valuable;
+    }
+
+    /**
+     * Check if item has required photos count.
+     */
+    public function hasRequiredPhotos(): bool
+    {
+        $count = $this->photos()->count();
+        $required = $this->requiresTripleShot() ? 3 : 1;
+
+        return $count >= $required;
+    }
+
+    /**
+     * Check if serial plate photo is required but missing.
+     */
+    public function isMissingSerialPlatePhoto(): bool
+    {
+        if (! $this->requires_serial_plate) {
+            return false;
+        }
+
+        // Check if any photo has serial_plate tag in metadata
+        return ! $this->photos()
+            ->whereJsonContains('metadata->tags', 'serial_plate')
+            ->exists();
     }
 
     protected $attributes = [
@@ -93,7 +153,7 @@ class ProtocolItem extends Model
      */
     public function hasDefects(): bool
     {
-        return !empty($this->defects);
+        return ! empty($this->defects);
     }
 
     /**
@@ -109,7 +169,9 @@ class ProtocolItem extends Model
      */
     public function photos(): MorphMany
     {
-        return $this->evidences()->photos();
+        return $this->morphMany(Evidence::class, 'evidenceable')
+            ->where('type', 'photo')
+            ->orderBy('sort_order');
     }
 
     /**

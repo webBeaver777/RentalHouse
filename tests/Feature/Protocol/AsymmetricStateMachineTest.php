@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Protocol;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -19,9 +21,13 @@ class AsymmetricStateMachineTest extends TestCase
     use RefreshDatabase;
 
     private User $landlord;
+
     private User $tenant;
+
     private Protocol $protocol;
+
     private Participant $landlordParticipant;
+
     private Participant $tenantParticipant;
 
     protected function setUp(): void

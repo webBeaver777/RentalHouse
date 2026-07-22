@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Protocol\Application\Actions;
 
 use App\Modules\Protocol\Application\Data\ProtocolData;

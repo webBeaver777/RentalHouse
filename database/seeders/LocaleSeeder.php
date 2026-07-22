@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Modules\Localization\Infrastructure\Models\Locale;
@@ -16,6 +18,7 @@ class LocaleSeeder extends Seeder
                 'native_name' => 'Polski',
                 'is_default' => true,
                 'is_active' => true,
+                'sort_order' => 1,
             ],
             [
                 'code' => 'en',
@@ -23,6 +26,7 @@ class LocaleSeeder extends Seeder
                 'native_name' => 'English',
                 'is_default' => false,
                 'is_active' => true,
+                'sort_order' => 2,
             ],
         ];
 

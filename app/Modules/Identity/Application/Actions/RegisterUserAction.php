@@ -1,10 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Identity\Application\Actions;
 
 use App\Modules\Identity\Application\Data\RegisterUserData;
 use App\Modules\Identity\Infrastructure\Models\User;
-use Illuminate\Support\Facades\Hash;
 
 class RegisterUserAction
 {

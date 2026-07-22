@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Identity;
 
 use App\Modules\Identity\Infrastructure\Models\User;
@@ -40,6 +42,7 @@ class RegistrationTest extends TestCase
             'name' => 'Jan Kowalski',
             'email' => 'jan@example.com',
             'password' => 'password123',
+            'is_admin' => true,
         ]);
 
         $response = $this->actingAs($user)->get('/admin');

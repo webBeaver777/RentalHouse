@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Protocol\Domain\Enums;
 
 enum ProtocolStatus: string
@@ -8,6 +10,7 @@ enum ProtocolStatus: string
     case PENDING_COUNTERPARTY = 'pending_counterparty';
     case PENDING_SIGNATURES = 'pending_signatures';
     case SIGNED = 'signed';
+    case DISPUTED = 'disputed';
     case COMPLETED = 'completed';
     case CANCELLED = 'cancelled';
 
@@ -18,6 +21,7 @@ enum ProtocolStatus: string
             self::PENDING_COUNTERPARTY => 'Oczekuje na drugą stronę',
             self::PENDING_SIGNATURES => 'Oczekuje na podpisy',
             self::SIGNED => 'Podpisany',
+            self::DISPUTED => 'Kwestionowany',
             self::COMPLETED => 'Zakończony',
             self::CANCELLED => 'Anulowany',
         };
@@ -30,6 +34,7 @@ enum ProtocolStatus: string
             self::PENDING_COUNTERPARTY => 'warning',
             self::PENDING_SIGNATURES => 'info',
             self::SIGNED => 'success',
+            self::DISPUTED => 'danger',
             self::COMPLETED => 'success',
             self::CANCELLED => 'danger',
         };
@@ -60,7 +65,8 @@ enum ProtocolStatus: string
             self::DRAFT => [self::PENDING_COUNTERPARTY, self::CANCELLED],
             self::PENDING_COUNTERPARTY => [self::DRAFT, self::PENDING_SIGNATURES, self::CANCELLED],
             self::PENDING_SIGNATURES => [self::SIGNED, self::CANCELLED],
-            self::SIGNED => [self::COMPLETED],
+            self::SIGNED => [self::COMPLETED, self::DISPUTED],
+            self::DISPUTED => [self::SIGNED, self::COMPLETED, self::CANCELLED],
             self::COMPLETED => [],
             self::CANCELLED => [],
         };

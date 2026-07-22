@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Evidence;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
@@ -22,7 +24,9 @@ class EvidenceTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Protocol $protocol;
+
     private ProtocolItem $item;
 
     protected function setUp(): void
@@ -80,7 +84,7 @@ class EvidenceTest extends TestCase
             'type' => EvidenceType::PHOTO,
             'filename' => 'photo_123.jpg',
             'original_filename' => 'living_room.jpg',
-            'path' => 'protocols/' . $this->protocol->id . '/photo_123.jpg',
+            'path' => 'protocols/'.$this->protocol->id.'/photo_123.jpg',
             'mime_type' => 'image/jpeg',
             'size' => 1024000,
         ]);

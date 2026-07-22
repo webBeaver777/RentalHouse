@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Identity;
 
 use App\Modules\Identity\Infrastructure\Models\User;
+use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -77,10 +80,10 @@ class UserModelTest extends TestCase
      */
     public function test_user_implements_filament_user(): void
     {
-        $user = new User();
+        $user = new User;
 
         $this->assertInstanceOf(
-            \Filament\Models\Contracts\FilamentUser::class,
+            FilamentUser::class,
             $user
         );
     }

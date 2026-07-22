@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Evidence;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
@@ -25,8 +27,11 @@ class EvidenceUploadServiceTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Protocol $protocol;
+
     private ProtocolItem $item;
+
     private EvidenceUploadService $service;
 
     protected function setUp(): void

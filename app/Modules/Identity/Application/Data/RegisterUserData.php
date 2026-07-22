@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Identity\Application\Data;
 
 use Spatie\LaravelData\Attributes\Validation\Email;

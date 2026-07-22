@@ -1,7 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
+use App\Modules\Acceptance\Providers\AcceptanceServiceProvider;
+use App\Modules\Billing\Providers\BillingServiceProvider;
+use App\Modules\Catalog\Providers\CatalogServiceProvider;
+use App\Modules\Document\Providers\DocumentServiceProvider;
+use App\Modules\Evidence\Providers\EvidenceServiceProvider;
+use App\Modules\Identity\Providers\IdentityServiceProvider;
+use App\Modules\Lifecycle\Providers\LifecycleServiceProvider;
+use App\Modules\Localization\Providers\LocalizationServiceProvider;
+use App\Modules\Notification\Providers\NotificationServiceProvider;
+use App\Modules\Participation\Providers\ParticipationServiceProvider;
+use App\Modules\Property\Providers\PropertyServiceProvider;
+use App\Modules\Protocol\Providers\ProtocolServiceProvider;
 use App\Providers\ModuleServiceProvider;
 use Tests\TestCase;
 
@@ -15,18 +29,18 @@ class ModuleDiscoveryTest extends TestCase
         $loadedProviders = array_keys($this->app->getLoadedProviders());
 
         $expectedProviders = [
-            \App\Modules\Identity\Providers\IdentityServiceProvider::class,
-            \App\Modules\Property\Providers\PropertyServiceProvider::class,
-            \App\Modules\Protocol\Providers\ProtocolServiceProvider::class,
-            \App\Modules\Participation\Providers\ParticipationServiceProvider::class,
-            \App\Modules\Acceptance\Providers\AcceptanceServiceProvider::class,
-            \App\Modules\Billing\Providers\BillingServiceProvider::class,
-            \App\Modules\Notification\Providers\NotificationServiceProvider::class,
-            \App\Modules\Document\Providers\DocumentServiceProvider::class,
-            \App\Modules\Evidence\Providers\EvidenceServiceProvider::class,
-            \App\Modules\Lifecycle\Providers\LifecycleServiceProvider::class,
-            \App\Modules\Catalog\Providers\CatalogServiceProvider::class,
-            \App\Modules\Localization\Providers\LocalizationServiceProvider::class,
+            IdentityServiceProvider::class,
+            PropertyServiceProvider::class,
+            ProtocolServiceProvider::class,
+            ParticipationServiceProvider::class,
+            AcceptanceServiceProvider::class,
+            BillingServiceProvider::class,
+            NotificationServiceProvider::class,
+            DocumentServiceProvider::class,
+            EvidenceServiceProvider::class,
+            LifecycleServiceProvider::class,
+            CatalogServiceProvider::class,
+            LocalizationServiceProvider::class,
         ];
 
         foreach ($expectedProviders as $provider) {

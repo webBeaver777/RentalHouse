@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Localization;
 
 use App\Modules\Localization\Infrastructure\Models\Locale;
@@ -80,5 +82,42 @@ class LocaleTest extends TestCase
     {
         $this->assertDatabaseHas('locales', ['code' => 'pl']);
         $this->assertDatabaseHas('locales', ['code' => 'en']);
+    }
+
+    /**
+     * Locales have sort_order field.
+     */
+    public function test_locales_have_sort_order(): void
+    {
+        $polish = Locale::where('code', 'pl')->first();
+        $english = Locale::where('code', 'en')->first();
+
+        $this->assertNotNull($polish->sort_order);
+        $this->assertNotNull($english->sort_order);
+        $this->assertLessThan($english->sort_order, $polish->sort_order);
+    }
+
+    /**
+     * Locales can be retrieved ordered.
+     */
+    public function test_locales_can_be_ordered(): void
+    {
+        $ordered = Locale::ordered()->get();
+
+        $this->assertGreaterThanOrEqual(2, $ordered->count());
+        $this->assertEquals('pl', $ordered->first()->code);
+    }
+
+    /**
+     * Active locales can be retrieved.
+     */
+    public function test_active_locales_can_be_retrieved(): void
+    {
+        $active = Locale::getActive();
+
+        $this->assertGreaterThanOrEqual(2, $active->count());
+        foreach ($active as $locale) {
+            $this->assertTrue($locale->is_active);
+        }
     }
 }
