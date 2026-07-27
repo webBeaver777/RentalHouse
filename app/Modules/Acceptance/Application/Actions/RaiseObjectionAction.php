@@ -6,8 +6,10 @@ namespace App\Modules\Acceptance\Application\Actions;
 
 use App\Modules\Acceptance\Infrastructure\Models\ProtocolObjection;
 use App\Modules\Participation\Infrastructure\Models\Participant;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use InvalidArgumentException;
 
@@ -25,7 +27,9 @@ final class RaiseObjectionAction
         Protocol $protocol,
         Participant $participant,
         string $reason,
-        ?array $itemIds = null
+        ?array $itemIds = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
     ): ProtocolObjection {
         $this->validateCanObject($protocol, $participant);
 
@@ -36,6 +40,17 @@ final class RaiseObjectionAction
             'item_ids' => $itemIds,
             'raised_at' => now(),
         ]);
+
+        // D7: Record objection event
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::OBJECTION_RAISED,
+            $participant->role->value,
+            $participant->user_id,
+            ['objection_id' => $objection->id, 'item_count' => count($itemIds ?? [])],
+            $ipAddress,
+            $userAgent
+        );
 
         // Transition protocol to disputed status
         if ($protocol->status === ProtocolStatus::SIGNED) {

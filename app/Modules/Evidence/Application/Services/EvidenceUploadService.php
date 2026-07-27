@@ -7,6 +7,8 @@ namespace App\Modules\Evidence\Application\Services;
 use App\Modules\Evidence\Domain\Enums\EvidenceType;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -74,7 +76,7 @@ class EvidenceUploadService
         }
 
         // Create evidence record with forensic data
-        return Evidence::create([
+        $evidence = Evidence::create([
             'protocol_id' => $protocol->id,
             'evidenceable_type' => $attachTo ? get_class($attachTo) : null,
             'evidenceable_id' => $attachTo?->getKey(),
@@ -94,6 +96,18 @@ class EvidenceUploadService
             'caption' => $caption,
             'metadata' => $fileMetadata ?: null,
         ]);
+
+        // D7: Record upload event
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::PHOTO_UPLOADED,
+            $protocol->getParticipantRole($uploader)?->value ?? 'initiator',
+            $uploader->id,
+            ['evidence_id' => $evidence->id, 'hash' => $hash],
+            $clientIp
+        );
+
+        return $evidence;
     }
 
     /**
@@ -124,8 +138,21 @@ class EvidenceUploadService
     /**
      * Delete evidence and its file.
      */
-    public function delete(Evidence $evidence, bool $forceDelete = false): bool
+    public function delete(Evidence $evidence, ?User $deletedBy = null, bool $forceDelete = false): bool
     {
+        $protocol = $evidence->protocol;
+
+        // D7: Record removal event before deletion
+        if ($protocol) {
+            InspectionEvent::record(
+                $protocol,
+                InspectionEventType::PHOTO_REMOVED,
+                $deletedBy ? ($protocol->getParticipantRole($deletedBy)?->value ?? 'initiator') : 'system',
+                $deletedBy?->id,
+                ['evidence_id' => $evidence->id, 'hash' => $evidence->hash]
+            );
+        }
+
         if ($forceDelete) {
             Storage::disk($evidence->disk)->delete($evidence->path);
 

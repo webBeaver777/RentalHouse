@@ -26,6 +26,8 @@ parameters:
         # SoftDeletes scope on Builder
         - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Builder.*::withTrashed\(\)#'
         # Type covariance with auth()->user()
-        - '#expects App\\Modules\\Identity\\Infrastructure\\Models\\User, Illuminate\\Database\\Eloquent\\Model\|null given#'
+        -
+            message: '#expects App\\Modules\\Identity\\Infrastructure\\Models\\User, Illuminate\\Database\\Eloquent\\Model\|null given#'
+            reportUnmatched: false
     excludePaths:
         - app/Modules/*/Infrastructure/Migrations/*

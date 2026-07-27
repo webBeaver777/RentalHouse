@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Protocol\Application\Actions;
 
+use App\Modules\Billing\Application\Services\EntitlementService;
+use App\Modules\Billing\Domain\Enums\AllowedAction;
+use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Domain\Exceptions\ProtocolFinalizationException;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 
 /**
@@ -16,26 +21,62 @@ use App\Modules\Protocol\Infrastructure\Models\Protocol;
  * Check-in requires acceptance from BOTH parties to be considered bilateral/valid.
  * Without both signatures, it's documented as unilateral.
  *
+ * D3 HARD-GATE: Requires consumed entitlement to finalize.
+ *
  * This action:
  * 1. Validates protocol is check-in type
- * 2. Checks that initiator has accepted
- * 3. Checks that counterparty has accepted (for bilateral)
- * 4. Transitions to completed state
+ * 2. Validates entitlement (D3 hard-gate)
+ * 3. Checks that initiator has accepted
+ * 4. Checks that counterparty has accepted (for bilateral)
+ * 5. Transitions to completed state
+ * 6. Records event in timeline (D7)
  */
 final class FinalizeCheckInAction
 {
+    public function __construct(
+        private readonly EntitlementService $entitlementService
+    ) {}
+
     /**
      * Finalize a check-in protocol.
      *
      * @throws ProtocolFinalizationException
+     * @throws EntitlementRequiredException
      */
-    public function execute(Protocol $protocol, bool $allowUnilateral = false): Protocol
-    {
+    public function execute(
+        Protocol $protocol,
+        bool $allowUnilateral = false,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): Protocol {
         $this->validate($protocol, $allowUnilateral);
+
+        // D3: HARD-GATE - require entitlement
+        $initiator = $protocol->initiator();
+        if ($initiator?->user) {
+            $this->entitlementService->consumeEntitlement(
+                $initiator->user,
+                $protocol,
+                AllowedAction::CREATE_CHECK_IN,
+                $ipAddress,
+                $userAgent
+            );
+        }
 
         $protocol->completed_at = now();
         $protocol->status = ProtocolStatus::COMPLETED;
         $protocol->save();
+
+        // D7: Record timeline event
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::PROTOCOL_FINALIZED,
+            $initiator?->role?->value,
+            $initiator?->user_id,
+            ['unilateral' => $allowUnilateral],
+            $ipAddress,
+            $userAgent
+        );
 
         return $protocol;
     }

@@ -10,6 +10,7 @@ use App\Modules\Billing\Infrastructure\Models\Entitlement;
 use App\Modules\Billing\Infrastructure\Models\EntitlementUsage;
 use App\Modules\Billing\Infrastructure\Models\Payment;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Lifecycle\Application\Services\LifecycleService;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 
 /**
@@ -91,13 +92,20 @@ final class EntitlementService
         $entitlement->consume();
 
         // Record usage
-        return EntitlementUsage::recordConsumption(
+        $usage = EntitlementUsage::recordConsumption(
             $entitlement,
             $protocol,
             $action,
             $ipAddress,
             $userAgent
         );
+
+        // D8: Start lifecycle if not already started
+        if ($protocol->paid_at === null) {
+            app(LifecycleService::class)->onPayment($protocol, now());
+        }
+
+        return $usage;
     }
 
     /**

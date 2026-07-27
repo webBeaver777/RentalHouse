@@ -13,6 +13,6 @@ final class SendInvitationNotification
     public function handle(ParticipantInvited $event): void
     {
         Notification::route('mail', $event->token->email)
-            ->notify(new InvitationNotification($event->protocol, $event->token));
+            ->notify(new InvitationNotification($event->protocol, $event->token, $event->rawToken));
     }
 }

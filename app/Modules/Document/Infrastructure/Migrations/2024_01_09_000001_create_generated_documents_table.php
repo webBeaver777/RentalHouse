@@ -18,6 +18,7 @@ return new class extends Migration
             $table->foreignUuid('protocol_id')->constrained()->cascadeOnDelete();
 
             $table->string('type'); // protocol_pdf, summary_pdf, evidence_archive
+            $table->string('template_type')->nullable(); // D4: PdfTemplateType
             $table->string('locale')->default('pl');
             $table->string('version')->default('1.0');
 

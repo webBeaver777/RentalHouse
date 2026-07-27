@@ -19,6 +19,7 @@ class GeneratedDocument extends Model
     protected $fillable = [
         'protocol_id',
         'type',
+        'template_type',
         'locale',
         'version',
         'filename',

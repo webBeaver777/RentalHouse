@@ -15,6 +15,9 @@ enum InspectionEventType: string
     case PROTOCOL_SUBMITTED = 'protocol_submitted';
     case PROTOCOL_FINALIZED = 'protocol_finalized';
     case PROTOCOL_CANCELLED = 'protocol_cancelled';
+    case PROTOCOL_STATUS_CHANGED = 'protocol_status_changed'; // D8: Generic status change
+    case PROTOCOL_ARCHIVED = 'protocol_archived'; // D8: Access expired
+    case PROTOCOL_PURGED = 'protocol_purged'; // D8: Retention expired
 
     // Invitation events
     case INVITATION_SENT = 'invitation_sent';
@@ -85,6 +88,9 @@ enum InspectionEventType: string
             self::PROTOCOL_SUBMITTED => 'Protokół przesłany',
             self::PROTOCOL_FINALIZED => 'Protokół sfinalizowany',
             self::PROTOCOL_CANCELLED => 'Protokół anulowany',
+            self::PROTOCOL_STATUS_CHANGED => 'Zmiana statusu protokołu',
+            self::PROTOCOL_ARCHIVED => 'Protokół zarchiwizowany',
+            self::PROTOCOL_PURGED => 'Protokół usunięty',
             self::INVITATION_SENT => 'Zaproszenie wysłane',
             self::INVITATION_VIEWED => 'Zaproszenie wyświetlone',
             self::INVITATION_EXPIRED => 'Zaproszenie wygasło',

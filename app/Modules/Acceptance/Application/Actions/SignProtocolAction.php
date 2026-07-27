@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Acceptance\Application\Actions;
 
 use App\Modules\Acceptance\Application\Services\AcceptanceService;
+use App\Modules\Acceptance\Domain\Enums\AcceptanceType;
+use App\Modules\Acceptance\Infrastructure\Models\Acceptance;
 use App\Modules\Participation\Infrastructure\Models\Participant;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use InvalidArgumentException;
 
@@ -30,17 +34,94 @@ final class SignProtocolAction
     public function execute(
         Protocol $protocol,
         Participant $participant,
-        ?string $signatureData = null
+        ?string $signatureData = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+        ?string $deviceFingerprint = null
     ): Protocol {
         $this->validateCanSign($protocol, $participant);
 
         // Sign for participant
         $participant->sign($signatureData);
 
+        // G2: Record acceptance with forensic data
+        $this->recordAcceptance(
+            $protocol,
+            $participant,
+            $ipAddress,
+            $userAgent,
+            $deviceFingerprint
+        );
+
+        // D7: Record signature event
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::SIGNATURE_ADDED,
+            $participant->role->value,
+            $participant->user_id,
+            ['is_initiator' => $participant->is_initiator],
+            $ipAddress,
+            $userAgent
+        );
+
         // Check if protocol should transition based on type
         $this->handlePostSignTransition($protocol);
 
         return $protocol->fresh();
+    }
+
+    /**
+     * G2: Record acceptance in acceptances table.
+     *
+     * Creates forensic record with consent_text_snapshot, ip, user_agent, device_fingerprint.
+     */
+    private function recordAcceptance(
+        Protocol $protocol,
+        Participant $participant,
+        ?string $ipAddress,
+        ?string $userAgent,
+        ?string $deviceFingerprint
+    ): void {
+        // Determine acceptance type based on protocol state
+        $hasComments = $this->acceptanceService->hasUnresolvedDisputes($protocol);
+        $acceptanceType = $hasComments
+            ? AcceptanceType::ACCEPTED_WITH_COMMENTS
+            : AcceptanceType::ACCEPTED;
+
+        // Generate consent text snapshot
+        $consentText = $this->generateConsentText($protocol, $participant);
+
+        Acceptance::recordAcceptance(
+            $protocol,
+            $participant->role,
+            $acceptanceType,
+            $participant->user_id,
+            $participant->isCounterparty() ? $participant->id : null,
+            $consentText,
+            $ipAddress,
+            $userAgent,
+            $deviceFingerprint
+        );
+    }
+
+    /**
+     * Generate consent text snapshot for acceptance.
+     */
+    private function generateConsentText(Protocol $protocol, Participant $participant): string
+    {
+        $typeLabel = $protocol->type === ProtocolType::CHECK_IN
+            ? 'protokołu zdawczo-odbiorczego (przekazanie)'
+            : 'protokołu zdawczo-odbiorczego (zwrot)';
+
+        $roleLabel = $participant->role->label();
+        $propertyAddress = $protocol->property?->full_address ?? 'nieznany adres';
+
+        return sprintf(
+            'Oświadczam, że zapoznałem/am się z treścią %s dla nieruchomości pod adresem %s i akceptuję jego treść jako %s.',
+            $typeLabel,
+            $propertyAddress,
+            $roleLabel
+        );
     }
 
     /**

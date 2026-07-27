@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Storage;
  * D6: Counterparty photo model.
  *
  * Photos uploaded by the counterparty during review.
+ *
+ * @property-read Protocol|null $protocol
+ * @property-read User|null $uploadedBy
  */
 class CounterpartyPhoto extends Model
 {

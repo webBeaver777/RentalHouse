@@ -7,9 +7,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * P2.0: Invitation tokens for secure protocol participation links.
+ * G3: Invitation tokens for secure protocol participation links.
  *
  * Tokens are single-use and expire after a configurable period.
+ * Raw token is NEVER stored - only SHA-256 hash.
  */
 return new class extends Migration
 {
@@ -19,7 +20,8 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignId('participant_id')->constrained()->cascadeOnDelete();
 
-            $table->string('token', 64)->unique();
+            // G3: Store hash, not raw token
+            $table->string('token_hash', 64)->unique();
             $table->string('email');
 
             $table->timestamp('expires_at');
@@ -31,7 +33,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index('token');
+            $table->index('token_hash');
             $table->index('email');
             $table->index('expires_at');
         });

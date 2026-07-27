@@ -192,16 +192,18 @@ class ProtocolStateMachineTest extends TestCase
     }
 
     /**
-     * Completed protocol cannot transition.
+     * Completed protocol can only transition to ARCHIVED (D8 lifecycle).
      */
-    public function test_completed_cannot_transition(): void
+    public function test_completed_can_only_transition_to_archived(): void
     {
         $this->protocol->submitToCounterparty();
         $this->protocol->requestSignatures();
         $this->protocol->markAsSigned();
         $this->protocol->complete();
 
-        $this->assertEmpty($this->protocol->allowedTransitions());
+        $allowed = $this->protocol->allowedTransitions();
+        $this->assertCount(1, $allowed);
+        $this->assertContains(ProtocolStatus::ARCHIVED, $allowed);
     }
 
     /**

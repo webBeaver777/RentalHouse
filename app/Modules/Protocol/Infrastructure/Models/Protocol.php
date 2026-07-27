@@ -21,6 +21,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use InvalidArgumentException;
 
+/**
+ * @property-read User|null $createdByUser
+ * @property-read Property|null $property
+ */
 class Protocol extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
@@ -44,6 +48,10 @@ class Protocol extends Model
         'locale',
         'property_declaration_type',
         'deposit_amount',
+        'document_hash', // D5: Frozen hash for PDF
+        'paid_at', // D8: When payment was made
+        'access_expires_at', // D8: When access expires
+        'retention_until', // D8: When data can be purged
         'metadata',
     ];
 
@@ -65,6 +73,9 @@ class Protocol extends Model
             'objection_window_ends_at' => 'datetime',
             'reference_mode' => ReferenceMode::class,
             'deposit_amount' => 'decimal:2',
+            'paid_at' => 'datetime', // D8
+            'access_expires_at' => 'datetime', // D8
+            'retention_until' => 'datetime', // D8
             'metadata' => 'array',
         ];
     }

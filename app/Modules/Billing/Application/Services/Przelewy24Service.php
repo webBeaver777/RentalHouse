@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Billing\Application\Services;
 
+use App\Modules\Billing\Domain\Contracts\PaymentGatewayInterface;
 use App\Modules\Billing\Domain\Enums\PaymentStatus;
 use App\Modules\Billing\Domain\Enums\ProductCode;
 use App\Modules\Billing\Infrastructure\Models\Payment;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
+use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -18,7 +22,7 @@ use Illuminate\Support\Str;
  * Replaces StripeWebhookService.
  * Implements: transaction registration, redirect, status verification, webhook, sandbox mode.
  */
-final class Przelewy24Service
+final class Przelewy24Service implements PaymentGatewayInterface
 {
     private string $merchantId;
 
@@ -279,5 +283,110 @@ final class Przelewy24Service
         Log::info("P24 Sandbox: Simulated successful payment for session {$payment->p24_session_id}");
 
         return true;
+    }
+
+    /**
+     * Register transaction for a protocol and record timeline event.
+     *
+     * D7: Records PAYMENT_STARTED event.
+     */
+    public function registerTransactionForProtocol(
+        Protocol $protocol,
+        User $user,
+        ProductCode $product,
+        int $amountInGrosze,
+        string $description
+    ): Payment {
+        $payment = $this->registerTransaction($user, $product, $amountInGrosze, $description);
+
+        // D7: Record payment started event
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::PAYMENT_STARTED,
+            $protocol->initiator()?->role?->value ?? 'system',
+            $user->id,
+            [
+                'payment_id' => $payment->id,
+                'product_code' => $product->value,
+                'amount' => $amountInGrosze,
+            ]
+        );
+
+        return $payment;
+    }
+
+    /**
+     * Record payment result event in timeline.
+     *
+     * D7: Records PAYMENT_PAID or PAYMENT_FAILED event.
+     */
+    public function recordPaymentResult(Payment $payment, Protocol $protocol): void
+    {
+        if ($payment->isSuccessful()) {
+            InspectionEvent::record(
+                $protocol,
+                InspectionEventType::PAYMENT_PAID,
+                'system',
+                $payment->user_id,
+                [
+                    'payment_id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'transaction_id' => $payment->p24_transaction_id,
+                ]
+            );
+        } elseif ($payment->status === PaymentStatus::FAILED) {
+            InspectionEvent::record(
+                $protocol,
+                InspectionEventType::PAYMENT_FAILED,
+                'system',
+                $payment->user_id,
+                [
+                    'payment_id' => $payment->id,
+                    'reason' => $payment->failure_reason,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Confirm payment as successful (for sandbox testing).
+     *
+     * In production, this would verify with P24 API.
+     * In sandbox without credentials, allows manual confirmation.
+     */
+    public function confirmPayment(Payment $payment): bool
+    {
+        if ($payment->status === PaymentStatus::PAID) {
+            return true;
+        }
+
+        // In sandbox mode without real API, allow direct confirmation
+        if ($this->sandbox && empty($this->merchantId)) {
+            $payment->update([
+                'status' => PaymentStatus::PAID,
+                'p24_transaction_id' => 'SANDBOX_'.strtoupper(Str::random(8)),
+                'paid_at' => now(),
+            ]);
+
+            Log::info('P24 Sandbox: Payment confirmed manually', [
+                'payment_id' => $payment->id,
+                'session_id' => $payment->p24_session_id,
+            ]);
+
+            return true;
+        }
+
+        // In production, this would call P24 API to verify
+        Log::warning('P24: Manual confirmation not allowed in production mode');
+
+        return false;
+    }
+
+    /**
+     * Check if gateway is in sandbox mode.
+     */
+    public function isSandbox(): bool
+    {
+        return $this->sandbox;
     }
 }

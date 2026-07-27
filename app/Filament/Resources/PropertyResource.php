@@ -6,12 +6,11 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PropertyResource\Pages;
 use App\Modules\Property\Infrastructure\Models\Property;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Select;
+use Filament\Schemas\Components\Textarea;
+use Filament\Schemas\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Tables\Actions\DeleteAction as TableDeleteAction;
@@ -41,7 +40,7 @@ class PropertyResource extends Resource
         return $schema
             ->components([
                 Section::make('Dane podstawowe')
-                    ->schema([
+                    ->components([
                         TextInput::make('name')
                             ->label('Nazwa')
                             ->required()
@@ -58,7 +57,7 @@ class PropertyResource extends Resource
                     ])->columns(2),
 
                 Section::make('Adres')
-                    ->schema([
+                    ->components([
                         TextInput::make('street')
                             ->label('Ulica')
                             ->required()
@@ -91,14 +90,11 @@ class PropertyResource extends Resource
                     ])->columns(3),
 
                 Section::make('Dodatkowe')
-                    ->schema([
+                    ->components([
                         Textarea::make('description')
                             ->label('Opis')
                             ->rows(3),
                     ]),
-
-                Hidden::make('user_id')
-                    ->default(fn () => auth()->id()),
             ]);
     }
 
@@ -172,8 +168,13 @@ class PropertyResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('user_id', auth()->id())
-            ->withTrashed();
+        $query = parent::getEloquentQuery()->withTrashed();
+
+        // Filter by user only when authenticated
+        if (auth()->check()) {
+            $query->where('user_id', auth()->id());
+        }
+
+        return $query;
     }
 }

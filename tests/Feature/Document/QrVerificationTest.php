@@ -136,18 +136,13 @@ class QrVerificationTest extends TestCase
     {
         $response = $this->get("/verify/{$this->document->hash}");
 
-        // Should contain hash for verification
-        $content = $response->getContent();
+        $response->assertStatus(200);
+        $response->assertViewIs('qr.verification');
 
-        // Inertia renders as JSON props, check page component exists
-        $response->assertInertia(fn ($page) => $page
-            ->component('Document/QrVerification')
-            ->has('document_hash')
-            ->has('generated_at')
-            ->has('document_type')
-            ->has('protocol_type')
-            ->has('all_signed')
-        );
+        // Should contain verification information
+        $response->assertSee('Dokument zweryfikowany');
+        $response->assertSee($this->document->hash);
+        $response->assertSee('Protokół wjazdowy'); // Polish label for check-in
     }
 
     /**
@@ -173,7 +168,7 @@ class QrVerificationTest extends TestCase
     }
 
     /**
-     * QR page returns 404 for invalid hash.
+     * QR page returns not found view for invalid hash.
      */
     public function test_qr_page_handles_invalid_hash(): void
     {
@@ -182,9 +177,8 @@ class QrVerificationTest extends TestCase
         $response = $this->get("/verify/{$invalidHash}");
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => $page
-            ->component('Document/QrNotFound')
-        );
+        $response->assertViewIs('qr.not-found');
+        $response->assertSee('Dokument nie znaleziony');
     }
 
     /**

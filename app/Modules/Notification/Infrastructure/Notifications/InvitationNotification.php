@@ -11,6 +11,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * G3: Invitation notification.
+ *
+ * Accepts raw_token (not stored in DB) for URL generation.
+ */
 class InvitationNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -18,6 +23,7 @@ class InvitationNotification extends Notification implements ShouldQueue
     public function __construct(
         private readonly Protocol $protocol,
         private readonly InvitationToken $token,
+        private readonly string $rawToken, // G3: Raw token for URL (not stored)
     ) {}
 
     public function via(object $notifiable): array
@@ -27,7 +33,8 @@ class InvitationNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $invitationUrl = url("/invitation/{$this->token->token}");
+        // G3: Use raw token for URL
+        $invitationUrl = url("/invitation/{$this->rawToken}");
         $propertyAddress = $this->protocol->property?->full_address ?? 'Nieznany adres';
         $protocolType = $this->protocol->type->value === 'check_in' ? 'przekazania' : 'zdania';
 

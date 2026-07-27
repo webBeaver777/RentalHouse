@@ -6,6 +6,8 @@ namespace App\Modules\Participation\Infrastructure\Models;
 
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Participation\Domain\Enums\ParticipantRole;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property-read User|null $user
+ * @property-read Protocol $protocol
+ */
 class Participant extends Model
 {
     use HasFactory, SoftDeletes;
@@ -234,5 +240,92 @@ class Participant extends Model
     public function scopeUnsigned($query)
     {
         return $query->whereNull('signed_at');
+    }
+
+    /**
+     * Get participation status for display.
+     *
+     * Status spectrum: sent → opened → commented → accepted → signed
+     *
+     * Derived from timestamps and inspection_events.
+     */
+    public function getParticipationStatusAttribute(): string
+    {
+        // Signed is the final state
+        if ($this->signed_at !== null) {
+            return 'signed';
+        }
+
+        // Declined
+        if ($this->declined_at !== null) {
+            return 'declined';
+        }
+
+        // Accepted (but not yet signed)
+        if ($this->accepted_at !== null) {
+            return 'accepted';
+        }
+
+        // Check if commented (from inspection events)
+        $hasCommented = InspectionEvent::where('protocol_id', $this->protocol_id)
+            ->where('actor_user_id', $this->user_id)
+            ->where('event_type', InspectionEventType::COMMENT_ADDED)
+            ->exists();
+
+        if ($hasCommented) {
+            return 'commented';
+        }
+
+        // Check if opened (viewed the magic link)
+        $hasOpened = InspectionEvent::where('protocol_id', $this->protocol_id)
+            ->where('actor_user_id', $this->user_id)
+            ->where('event_type', InspectionEventType::MAGIC_LINK_USED)
+            ->exists();
+
+        if ($hasOpened) {
+            return 'opened';
+        }
+
+        // Invited but not opened
+        if ($this->invited_at !== null) {
+            return 'sent';
+        }
+
+        // Not yet invited (initiator or pending setup)
+        return 'pending';
+    }
+
+    /**
+     * Get participation status label in Polish.
+     */
+    public function getParticipationStatusLabelAttribute(): string
+    {
+        return match ($this->participation_status) {
+            'signed' => 'Podpisano',
+            'declined' => 'Odrzucono',
+            'accepted' => 'Zaakceptowano',
+            'commented' => 'Skomentowano',
+            'opened' => 'Otworzono',
+            'sent' => 'Wysłano',
+            'pending' => 'Oczekuje',
+            default => 'Nieznany',
+        };
+    }
+
+    /**
+     * Get participation status color for UI.
+     */
+    public function getParticipationStatusColorAttribute(): string
+    {
+        return match ($this->participation_status) {
+            'signed' => 'success',
+            'declined' => 'danger',
+            'accepted' => 'info',
+            'commented' => 'warning',
+            'opened' => 'primary',
+            'sent' => 'secondary',
+            'pending' => 'gray',
+            default => 'gray',
+        };
     }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Modules\Identity\Infrastructure\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,11 +20,17 @@ class DatabaseSeeder extends Seeder
         $this->call([
             LocaleSeeder::class,
             CatalogSeeder::class,
+            AdminSeeder::class,
         ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // Create test user (non-admin)
+        if (! User::where('email', 'test@example.com')->exists()) {
+            User::create([
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'password' => bcrypt('password'),
+                'is_admin' => false,
+            ]);
+        }
     }
 }

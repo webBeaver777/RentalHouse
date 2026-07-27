@@ -3,7 +3,7 @@
 
 .PHONY: help up down build rebuild fresh shell shell-root status logs \
         migrate migrate-fresh seed test pint phpstan artisan \
-        npm composer queue-restart tinker restore-db
+        npm composer queue-restart tinker restore-db admin admin-dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -162,6 +162,14 @@ npm-build: ## Build frontend assets
 
 npm-dev: ## Start Vite dev server (runs in foreground)
 	docker compose exec app npm run dev
+
+# === Admin Commands ===
+
+admin: ## Create admin user interactively
+	docker compose exec app php artisan app:create-admin
+
+admin-dev: ## Create default dev admin (admin@rent2proof.local / admin123)
+	docker compose exec app php artisan db:seed --class=AdminSeeder
 
 # === Utility Commands ===
 

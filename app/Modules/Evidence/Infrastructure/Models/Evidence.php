@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * @property-read Protocol|null $protocol
+ * @property-read User|null $uploadedBy
+ */
 class Evidence extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;

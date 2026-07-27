@@ -13,6 +13,7 @@ enum ProtocolStatus: string
     case DISPUTED = 'disputed';
     case COMPLETED = 'completed';
     case CANCELLED = 'cancelled';
+    case ARCHIVED = 'archived'; // D8: Access expired, data retained
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum ProtocolStatus: string
             self::DISPUTED => 'Kwestionowany',
             self::COMPLETED => 'Zakończony',
             self::CANCELLED => 'Anulowany',
+            self::ARCHIVED => 'Zarchiwizowany',
         };
     }
 
@@ -37,6 +39,7 @@ enum ProtocolStatus: string
             self::DISPUTED => 'danger',
             self::COMPLETED => 'success',
             self::CANCELLED => 'danger',
+            self::ARCHIVED => 'gray',
         };
     }
 
@@ -53,7 +56,7 @@ enum ProtocolStatus: string
      */
     public function isFinal(): bool
     {
-        return in_array($this, [self::COMPLETED, self::CANCELLED]);
+        return in_array($this, [self::COMPLETED, self::CANCELLED, self::ARCHIVED]);
     }
 
     /**
@@ -67,8 +70,9 @@ enum ProtocolStatus: string
             self::PENDING_SIGNATURES => [self::SIGNED, self::CANCELLED],
             self::SIGNED => [self::COMPLETED, self::DISPUTED],
             self::DISPUTED => [self::SIGNED, self::COMPLETED, self::CANCELLED],
-            self::COMPLETED => [],
+            self::COMPLETED => [self::ARCHIVED], // D8: System can archive after access expires
             self::CANCELLED => [],
+            self::ARCHIVED => [], // Final state
         };
     }
 

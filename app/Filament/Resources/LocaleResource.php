@@ -6,10 +6,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\LocaleResource\Pages;
 use App\Modules\Localization\Infrastructure\Models\Locale;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\TextInput;
+use Filament\Schemas\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;

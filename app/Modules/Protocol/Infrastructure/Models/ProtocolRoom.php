@@ -21,6 +21,7 @@ class ProtocolRoom extends Model
         'catalog_item_id',
         'custom_name',
         'description',
+        'name_snapshot',
         'sort_order',
         'metadata',
     ];
@@ -29,6 +30,7 @@ class ProtocolRoom extends Model
     {
         return [
             'sort_order' => 'integer',
+            'name_snapshot' => 'array',
             'metadata' => 'array',
         ];
     }
@@ -58,12 +60,24 @@ class ProtocolRoom extends Model
     }
 
     /**
-     * Get the display name (custom name or catalog name).
+     * Get the display name (custom name, snapshot, or catalog name).
+     *
+     * Priority: custom_name > name_snapshot > live catalog
      */
     public function getDisplayNameAttribute(): string
     {
         if ($this->custom_name) {
             return $this->custom_name;
+        }
+
+        // G5: Use frozen snapshot if available
+        if ($this->name_snapshot) {
+            $locale = app()->getLocale();
+
+            return $this->name_snapshot[$locale]
+                ?? $this->name_snapshot['pl']
+                ?? array_values($this->name_snapshot)[0]
+                ?? '';
         }
 
         return $this->catalogItem?->getTranslation('name', app()->getLocale()) ?? '';

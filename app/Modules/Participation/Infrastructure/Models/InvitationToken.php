@@ -8,13 +8,19 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * G3: Invitation token model.
+ *
+ * Raw tokens are NEVER stored - only SHA-256 hash.
+ * Expiry is configurable via lifecycle.invitation_token_hours.
+ */
 class InvitationToken extends Model
 {
     use HasUuids;
 
     protected $fillable = [
         'participant_id',
-        'token',
+        'token_hash', // G3: Only store hash, never raw token
         'email',
         'expires_at',
         'used_at',
@@ -116,10 +122,44 @@ class InvitationToken extends Model
     }
 
     /**
-     * Scope: Find by token string.
+     * G3: Scope: Find by token string (hashes the token for lookup).
      */
     public function scopeByToken($query, string $token)
     {
-        return $query->where('token', $token);
+        return $query->where('token_hash', hash('sha256', $token));
+    }
+
+    /**
+     * G3: Create token with hash storage.
+     *
+     * Returns the raw token (to be sent to user), stores only hash.
+     */
+    public static function createForParticipant(
+        Participant $participant,
+        string $email,
+        ?int $expiryHours = null
+    ): array {
+        $expiryHours = $expiryHours ?? (int) config('lifecycle.invitation_token_hours', 72);
+        $rawToken = bin2hex(random_bytes(32)); // 64 character hex string
+
+        $token = self::create([
+            'participant_id' => $participant->id,
+            'token_hash' => hash('sha256', $rawToken),
+            'email' => $email,
+            'expires_at' => now()->addHours($expiryHours),
+        ]);
+
+        return [
+            'token' => $token,
+            'raw_token' => $rawToken, // Send this to user, never store
+        ];
+    }
+
+    /**
+     * G3: Find valid token by raw token string.
+     */
+    public static function findByRawToken(string $rawToken): ?self
+    {
+        return self::byToken($rawToken)->valid()->first();
     }
 }

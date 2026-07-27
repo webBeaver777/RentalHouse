@@ -29,6 +29,11 @@ Route::prefix('verify')->name('verify.')->group(function (): void {
         ->name('api');
 });
 
+// D5: QR verify alias for PDF generation
+Route::get('/qr/{hash}', [QrVerificationController::class, 'show'])
+    ->name('qr.verify')
+    ->where('hash', '[a-f0-9]{64}');
+
 /*
 |--------------------------------------------------------------------------
 | D1: Payment Routes

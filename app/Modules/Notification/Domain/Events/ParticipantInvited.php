@@ -19,5 +19,6 @@ final class ParticipantInvited
         public readonly Protocol $protocol,
         public readonly Participant $participant,
         public readonly InvitationToken $token,
+        public readonly string $rawToken, // G3: Raw token for invitation URL (not stored)
     ) {}
 }

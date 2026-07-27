@@ -4,34 +4,67 @@ declare(strict_types=1);
 
 namespace App\Modules\Participation\Application\Services;
 
+use App\Modules\Billing\Application\Services\EntitlementService;
+use App\Modules\Billing\Domain\Enums\AllowedAction;
+use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Participation\Infrastructure\Models\InvitationToken;
 use App\Modules\Participation\Infrastructure\Models\Participant;
+use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Domain\Enums\ProtocolType;
+use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * Service for managing protocol invitations.
+ * G3: Service for managing protocol invitations.
+ *
+ * D3 HARD-GATE: For check-in, requires consumed entitlement to send magic-link.
+ * G3: Stores token_hash, not raw token. Uses configurable expiry from lifecycle config.
  *
  * Handles invitation creation, token generation, and acceptance flow.
  */
 final class InvitationService
 {
-    private const DEFAULT_EXPIRATION_HOURS = 168; // 7 days
+    // G3: Use config for expiration, fallback to 72 hours
+    private const DEFAULT_EXPIRATION_HOURS = 72;
+
+    public function __construct(
+        private readonly EntitlementService $entitlementService
+    ) {}
 
     /**
      * Invite a user by email to participate in a protocol.
+     *
+     * D3: For check-in protocols, requires entitlement to send magic-link.
+     *
+     * @throws EntitlementRequiredException
      */
     public function inviteByEmail(
         Protocol $protocol,
         string $email,
         ParticipantRole $role,
         bool $isInitiator = false,
-        int $expirationHours = self::DEFAULT_EXPIRATION_HOURS
+        int $expirationHours = self::DEFAULT_EXPIRATION_HOURS,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
     ): InvitationToken {
         $this->validateInvitation($protocol, $role);
+
+        // D3: HARD-GATE for check-in - require entitlement before sending magic-link
+        if (! $isInitiator && $protocol->type === ProtocolType::CHECK_IN) {
+            $initiator = $protocol->initiator();
+            if ($initiator?->user) {
+                $this->entitlementService->consumeEntitlement(
+                    $initiator->user,
+                    $protocol,
+                    AllowedAction::CREATE_CHECK_IN,
+                    $ipAddress,
+                    $userAgent
+                );
+            }
+        }
 
         $participant = Participant::create([
             'protocol_id' => $protocol->id,
@@ -41,7 +74,22 @@ final class InvitationService
             'invited_at' => now(),
         ]);
 
-        return $this->generateToken($participant, $email, $expirationHours);
+        $token = $this->generateToken($participant, $email, $expirationHours);
+
+        // D7: Record timeline event
+        if (! $isInitiator) {
+            InspectionEvent::record(
+                $protocol,
+                InspectionEventType::INVITATION_SENT,
+                $protocol->initiator()?->role?->value,
+                $protocol->initiator()?->user_id,
+                ['email' => $this->maskEmail($email), 'role' => $role->value],
+                $ipAddress,
+                $userAgent
+            );
+        }
+
+        return $token;
     }
 
     /**
@@ -114,6 +162,29 @@ final class InvitationService
         $participant->accept();
         $invitationToken->markAsUsed($ip, $userAgent);
 
+        // D7: Record timeline events
+        $protocol = $participant->protocol;
+
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::MAGIC_LINK_USED,
+            $participant->role->value,
+            $participant->user_id,
+            null,
+            $ip,
+            $userAgent
+        );
+
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::SIGNATURE_ADDED,
+            $participant->role->value,
+            $participant->user_id,
+            ['acceptance_type' => 'accepted'],
+            $ip,
+            $userAgent
+        );
+
         return $participant;
     }
 
@@ -134,6 +205,29 @@ final class InvitationService
         $participant = $invitationToken->participant;
         $participant->decline();
         $invitationToken->markAsUsed($ip, $userAgent);
+
+        // D7: Record timeline events
+        $protocol = $participant->protocol;
+
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::MAGIC_LINK_USED,
+            $participant->role->value,
+            $participant->user_id,
+            null,
+            $ip,
+            $userAgent
+        );
+
+        InspectionEvent::record(
+            $protocol,
+            InspectionEventType::SIGNATURE_DECLINED,
+            $participant->role->value,
+            $participant->user_id,
+            null,
+            $ip,
+            $userAgent
+        );
 
         return $participant;
     }
@@ -175,35 +269,50 @@ final class InvitationService
     }
 
     /**
-     * Get invitation URL from token.
+     * G3: Get invitation URL from raw token.
+     *
+     * Note: This should be called immediately after generateToken,
+     * as raw_token is not stored and cannot be retrieved later.
      */
-    public function getInvitationUrl(InvitationToken $token): string
+    public function getInvitationUrl(string $rawToken): string
     {
-        return url("/invitation/{$token->token}");
+        return url("/invitation/{$rawToken}");
     }
 
     /**
-     * Find valid token by string.
+     * G3: Find valid token by raw token string.
      */
-    public function findValidToken(string $token): ?InvitationToken
+    public function findValidToken(string $rawToken): ?InvitationToken
     {
-        return InvitationToken::byToken($token)->valid()->first();
+        return InvitationToken::findByRawToken($rawToken);
     }
 
     /**
-     * Generate secure token for participant.
+     * G3: Generate secure token for participant.
+     *
+     * Returns array with 'token' (model) and 'raw_token' (to send to user).
+     * Raw token is NEVER stored - only hash.
      */
     private function generateToken(
         Participant $participant,
         string $email,
         int $expirationHours
     ): InvitationToken {
-        return InvitationToken::create([
+        $expiryHours = (int) config('lifecycle.invitation_token_hours', $expirationHours);
+        $rawToken = bin2hex(random_bytes(32)); // 64 character hex string
+
+        $token = InvitationToken::create([
             'participant_id' => $participant->id,
-            'token' => Str::random(64),
+            'token_hash' => hash('sha256', $rawToken),
             'email' => $email,
-            'expires_at' => now()->addHours($expirationHours),
+            'expires_at' => now()->addHours($expiryHours),
         ]);
+
+        // Store raw_token temporarily for URL generation
+        // Note: The caller must use getInvitationUrl immediately
+        $token->setAttribute('raw_token', $rawToken);
+
+        return $token;
     }
 
     /**
@@ -229,5 +338,25 @@ final class InvitationService
                 'Cannot invite participants to a finalized protocol'
             );
         }
+    }
+
+    /**
+     * Mask email for logging (RODO compliance).
+     */
+    private function maskEmail(string $email): string
+    {
+        $parts = explode('@', $email);
+        if (count($parts) !== 2) {
+            return '***';
+        }
+
+        $local = $parts[0];
+        $domain = $parts[1];
+
+        if (strlen($local) <= 2) {
+            return $local[0].'***@'.$domain;
+        }
+
+        return $local[0].'***'.substr($local, -1).'@'.$domain;
     }
 }
