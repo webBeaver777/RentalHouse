@@ -409,5 +409,5 @@ POST /webhook/przelewy24        # Обработка платежей
 
 ## Авторы
 
-- Разработка: [Ваше имя/компания]
-- Контакт: email@example.com
+- Разработка: Dmitrii Bobrikov
+- Контакт: webbeaver777@gmail.com
