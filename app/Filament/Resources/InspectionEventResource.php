@@ -7,6 +7,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\InspectionEventResource\Pages;
 use App\Modules\Protocol\Domain\Enums\InspectionEventType;
 use App\Modules\Protocol\Infrastructure\Models\InspectionEvent;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -96,7 +97,7 @@ class InspectionEventResource extends Resource
                     ]),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
             ])
             ->bulkActions([]);
     }

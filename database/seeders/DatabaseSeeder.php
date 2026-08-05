@@ -20,8 +20,14 @@ class DatabaseSeeder extends Seeder
         $this->call([
             LocaleSeeder::class,
             CatalogSeeder::class,
-            AdminSeeder::class,
         ]);
+
+        // M8 Phase 1: only seed an admin from .env if both vars are set.
+        // AdminSeeder itself also no-ops (with a warning) if they're missing,
+        // but gating here keeps the intent explicit at the call site.
+        if (config('admin.email') && config('admin.password')) {
+            $this->call(AdminSeeder::class);
+        }
 
         // Create test user (non-admin)
         if (! User::where('email', 'test@example.com')->exists()) {

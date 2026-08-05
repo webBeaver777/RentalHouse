@@ -7,6 +7,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\PaymentResource\Pages;
 use App\Modules\Billing\Domain\Enums\PaymentStatus;
 use App\Modules\Billing\Infrastructure\Models\Payment;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -113,7 +114,7 @@ class PaymentResource extends Resource
                     ->label('Zweryfikowana'),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
             ])
             ->bulkActions([]);
     }

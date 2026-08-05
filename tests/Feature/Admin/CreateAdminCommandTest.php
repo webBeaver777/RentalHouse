@@ -114,10 +114,14 @@ class CreateAdminCommandTest extends TestCase
     }
 
     /**
-     * Test AdminSeeder creates default admin.
+     * M8 Phase 1: AdminSeeder reads ADMIN_EMAIL/ADMIN_PASSWORD from config
+     * (config/admin.php, itself backed by .env) and creates that admin.
+     * It must NOT ship a hardcoded default credential.
      */
-    public function test_admin_seeder_creates_default_admin(): void
+    public function test_admin_seeder_creates_admin_from_config(): void
     {
+        config(['admin.email' => 'admin@rent2proof.local', 'admin.password' => 'secret1234']);
+
         $this->seed(AdminSeeder::class);
 
         $user = User::where('email', 'admin@rent2proof.local')->first();
@@ -125,13 +129,16 @@ class CreateAdminCommandTest extends TestCase
         $this->assertNotNull($user);
         $this->assertTrue($user->is_admin);
         $this->assertEquals('Administrator', $user->name);
+        $this->assertTrue(Hash::check('secret1234', $user->password));
     }
 
     /**
-     * Test AdminSeeder skips if admin exists.
+     * Test AdminSeeder skips if admin exists (promotes/updates instead of duplicating).
      */
     public function test_admin_seeder_skips_if_exists(): void
     {
+        config(['admin.email' => 'admin@rent2proof.local', 'admin.password' => 'secret1234']);
+
         User::create([
             'name' => 'Existing Admin',
             'email' => 'admin@rent2proof.local',
@@ -145,5 +152,18 @@ class CreateAdminCommandTest extends TestCase
         // Only one admin with this email
         $count = User::where('email', 'admin@rent2proof.local')->count();
         $this->assertEquals(1, $count);
+    }
+
+    /**
+     * M8 Phase 1: no hardcoded default credential — seeder no-ops when
+     * ADMIN_EMAIL/ADMIN_PASSWORD are not configured.
+     */
+    public function test_admin_seeder_noops_when_env_not_set(): void
+    {
+        config(['admin.email' => null, 'admin.password' => null]);
+
+        $this->seed(AdminSeeder::class);
+
+        $this->assertEquals(0, User::count());
     }
 }

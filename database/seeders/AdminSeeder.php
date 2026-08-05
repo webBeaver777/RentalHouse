@@ -9,20 +9,38 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * M8 Phase 1: Admin user seeder for development.
+ * M8 Phase 1: Admin user seeder.
  *
- * Creates a default admin user for local development.
- * Credentials: admin@rent2proof.local / admin123
+ * Reads ADMIN_EMAIL / ADMIN_PASSWORD from .env and idempotently
+ * creates or promotes that user to is_admin=true. No-op (with a
+ * console warning) if either variable is unset — this seeder is
+ * NOT meant to ship a hardcoded default credential.
+ *
+ * Call site: DatabaseSeeder must only invoke this when both env
+ * vars are present (see DatabaseSeeder::run()).
  */
 class AdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $email = 'admin@rent2proof.local';
+        $email = config('admin.email');
+        $password = config('admin.password');
 
-        // Skip if admin already exists
-        if (User::where('email', $email)->exists()) {
-            $this->command->info("Admin user {$email} already exists, skipping.");
+        if (! $email || ! $password) {
+            $this->command?->warn('ADMIN_EMAIL / ADMIN_PASSWORD not set in .env — skipping AdminSeeder.');
+
+            return;
+        }
+
+        $user = User::where('email', $email)->first();
+
+        if ($user !== null) {
+            $user->update([
+                'password' => Hash::make($password),
+                'is_admin' => true,
+            ]);
+
+            $this->command?->info("Existing user {$email} promoted to admin.");
 
             return;
         }
@@ -30,11 +48,11 @@ class AdminSeeder extends Seeder
         User::create([
             'name' => 'Administrator',
             'email' => $email,
-            'password' => Hash::make('admin123'),
+            'password' => Hash::make($password),
             'is_admin' => true,
             'email_verified_at' => now(),
         ]);
 
-        $this->command->info("Admin user created: {$email} / admin123");
+        $this->command?->info("Admin user created: {$email}");
     }
 }

@@ -205,7 +205,11 @@ HARD-GATE: оплата через Przelewy24 создаёт entitlement, кот
 ### Lifecycle
 - `access_expires_at` = paid_at + 12 месяцев
 - `retention_until` = access_expires_at + 3 года
-- Автоматический переход в архив и soft-delete
+- Расписание регистрируется в `App\Modules\Lifecycle\Providers\LifecycleServiceProvider::boot()` (не в `routes/console.php`):
+  - `lifecycle:process` — каждые 15 минут: архивация протоколов после `access_expires_at` + диспатч джобов `CompleteExpiredObjectionWindows` (закрытие окна возражений check-out → `completed`) и `SendObjectionWindowReminders` (напоминание за 24ч до конца окна — это дедлайн-напоминание из §11, не запрещённая «автонотификация о продлении»)
+  - `lifecycle:purge-expired` — ежемесячно: soft-delete после `retention_until`
+  - Требует, чтобы `php artisan schedule:work` был запущен в контейнере (см. `docker/supervisord.conf`, `[program:scheduler]`) — иначе команды существуют, но не срабатывают сами
+  - **Открытый вопрос (не исправлено молча)**: `CompleteExpiredObjectionWindows` пропускает авто-завершение, если `hasUnresolvedObjections() === true` — стоит сверить с § 21 («возражение не блокирует акт»), т.к. на этой стадии протокол уже `SIGNED`/`act_issued_at` заполнен, и завершение перехода в `completed`, возможно, не должно ждать разрешения возражения
 
 ### Catalog
 Каталог комнат и элементов с translatable JSON, заморозка snapshot при создании протокола.
@@ -357,10 +361,12 @@ POST /webhook/przelewy24        # Обработка платежей
 | Поле ТЗ | Поле в коде | Тип | Описание |
 |---------|-------------|-----|----------|
 | act_issued_at | act_issued_at | datetime | Дата издания акта (только check-out) |
-| objection_window_ends_at | objection_window_ends_at | datetime | Конец окна возражений (72ч по умолчанию) |
+| objection_window_ends_at | objection_window_ends_at | datetime | Конец окна возражений (72ч по умолчанию); закрывается фоновой командой `protocol:close-objection-windows` |
 | reference_mode | reference_mode | enum | SYSTEM_BASELINE / UPLOADED_REFERENCE / NO_REFERENCE |
 | linked_checkin_id | linked_checkin_id | UUID FK | Ссылка на связанный check-in |
 | deposit_amount | deposit_amount | decimal | Сумма депозита |
+
+Полная таблица D10 (все связанные таблицы, enum'ы, диаграмма связей) — каноническая версия в [`docs/D10-FIELD-MAPPING.md`](docs/D10-FIELD-MAPPING.md), там же честно помечены поля, которых нет в схеме (`counterparty_phone`, `pdf_status`) и computed-атрибуты, не являющиеся колонками (`total_damage_cost`, `amount_to_return`). См. также [`docs/adr/ADR-005-naming-conventions.md`](docs/adr/ADR-005-naming-conventions.md) — канонические переименования и разграничение `acceptances`/`item_acceptances`.
 
 ### Lifecycle поля (D8)
 
@@ -395,10 +401,13 @@ POST /webhook/przelewy24        # Обработка платежей
 
 ### Расхождения в именовании
 
+Кратко (см. канонический разбор с обоснованием в [ADR-005](docs/adr/ADR-005-naming-conventions.md)):
+
 | ТЗ | Код | Причина |
 |----|-----|---------|
 | inspections | protocols | Более точное название для документа |
 | counterparty_participations | participants | Короче, включает и инициатора |
+| objections | protocol_objections | Явная привязка к протоколу |
 | elements | protocol_items | Более специфичное название |
 
 **Примечание**: Каноническая таблица называется `protocols`, не `inspections`. Таблица `participants` соответствует `counterparty_participations` из ТЗ.

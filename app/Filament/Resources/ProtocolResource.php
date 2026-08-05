@@ -10,6 +10,7 @@ use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -93,8 +94,15 @@ class ProtocolResource extends Resource
                     ->searchable(['property.street', 'property.city'])
                     ->limit(30),
 
-                Tables\Columns\TextColumn::make('counterparty.invited_email')
+                Tables\Columns\TextColumn::make('counterparty_email')
                     ->label('Druga strona')
+                    // M8-VERIFY fix: 'counterparty.invited_email' dot-notation
+                    // crashed with "Call to a member function getRelated() on
+                    // null" — Protocol::counterparty() is a helper
+                    // (participants()->where(...)->first()) that returns
+                    // ?Participant, not an Eloquent Relation, so Filament's
+                    // relationship-path resolution can't introspect it.
+                    ->getStateUsing(fn (Protocol $record): ?string => $record->counterparty()?->invited_email)
                     ->placeholder('Brak')
                     ->limit(25),
 
@@ -141,7 +149,7 @@ class ProtocolResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
             ])
             ->bulkActions([]);
     }

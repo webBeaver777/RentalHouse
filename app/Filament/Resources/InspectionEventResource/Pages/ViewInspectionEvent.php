@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Resources\InspectionEventResource\Pages;
 
 use App\Filament\Resources\InspectionEventResource;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\TextEntry;
 use Filament\Schemas\Schema;
 
 class ViewInspectionEvent extends ViewRecord

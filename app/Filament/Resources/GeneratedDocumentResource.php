@@ -8,6 +8,8 @@ use App\Filament\Resources\GeneratedDocumentResource\Pages;
 use App\Modules\Document\Application\Services\PdfGenerationService;
 use App\Modules\Document\Domain\Enums\DocumentType;
 use App\Modules\Document\Infrastructure\Models\GeneratedDocument;
+use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -109,9 +111,9 @@ class GeneratedDocumentResource extends Resource
                     ]),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
 
-                Tables\Actions\Action::make('regenerate')
+                Action::make('regenerate')
                     ->label('Regeneruj')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
@@ -136,7 +138,7 @@ class GeneratedDocumentResource extends Resource
                         }
                     }),
 
-                Tables\Actions\Action::make('download')
+                Action::make('download')
                     ->label('Pobierz')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->url(fn (GeneratedDocument $record): string => $record->getTemporaryUrl(60))

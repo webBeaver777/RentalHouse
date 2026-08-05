@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ProtocolResource\Pages;
 
 use App\Filament\Resources\ProtocolResource;
+use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\TextEntry;
 use Filament\Schemas\Schema;
 
 /**
@@ -69,22 +70,32 @@ class ViewProtocol extends ViewRecord
 
                 Section::make('Uczestnicy')
                     ->schema([
-                        TextEntry::make('initiator.invited_email')
-                            ->label('Inicjator (email)'),
+                        // M8-VERIFY fix: 'initiator.xxx' / 'counterparty.xxx' dot
+                        // paths crashed with "Call to a member function
+                        // getRelated() on null" — Protocol::initiator()/
+                        // counterparty() are helpers (participants()->where(...)
+                        // ->first()) that return ?Participant, not an Eloquent
+                        // Relation, so Filament can't auto-resolve the path.
+                        TextEntry::make('initiator_email')
+                            ->label('Inicjator (email)')
+                            ->getStateUsing(fn (Protocol $record): ?string => $record->initiator()?->invited_email),
 
-                        TextEntry::make('initiator.accepted_at')
+                        TextEntry::make('initiator_accepted_at')
                             ->label('Zaakceptowano')
                             ->dateTime('d.m.Y H:i')
-                            ->placeholder('Oczekuje'),
+                            ->placeholder('Oczekuje')
+                            ->getStateUsing(fn (Protocol $record) => $record->initiator()?->accepted_at),
 
-                        TextEntry::make('counterparty.invited_email')
+                        TextEntry::make('counterparty_email')
                             ->label('Druga strona (email)')
-                            ->placeholder('Nie zaproszono'),
+                            ->placeholder('Nie zaproszono')
+                            ->getStateUsing(fn (Protocol $record): ?string => $record->counterparty()?->invited_email),
 
-                        TextEntry::make('counterparty.accepted_at')
+                        TextEntry::make('counterparty_accepted_at')
                             ->label('Zaakceptowano')
                             ->dateTime('d.m.Y H:i')
-                            ->placeholder('Oczekuje'),
+                            ->placeholder('Oczekuje')
+                            ->getStateUsing(fn (Protocol $record) => $record->counterparty()?->accepted_at),
                     ])
                     ->columns(2),
 

@@ -168,7 +168,7 @@ npm-dev: ## Start Vite dev server (runs in foreground)
 admin: ## Create admin user interactively
 	docker compose exec app php artisan app:create-admin
 
-admin-dev: ## Create default dev admin (admin@rent2proof.local / admin123)
+admin-dev: ## Create admin from ADMIN_EMAIL/ADMIN_PASSWORD in .env (no-op if unset)
 	docker compose exec app php artisan db:seed --class=AdminSeeder
 
 # === Utility Commands ===

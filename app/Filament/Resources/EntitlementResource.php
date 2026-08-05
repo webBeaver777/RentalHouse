@@ -8,6 +8,7 @@ use App\Filament\Resources\EntitlementResource\Pages;
 use App\Modules\Billing\Domain\Enums\AllowedAction;
 use App\Modules\Billing\Domain\Enums\ProductCode;
 use App\Modules\Billing\Infrastructure\Models\Entitlement;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -127,7 +128,7 @@ class EntitlementResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
             ])
             ->bulkActions([]);
     }

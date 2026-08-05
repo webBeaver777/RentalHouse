@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Property;
 
+use App\Filament\Resources\PropertyResource;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Property\Domain\Enums\DeclarationType;
 use App\Modules\Property\Infrastructure\Models\Property;
@@ -161,13 +162,31 @@ class PropertyTest extends TestCase
     /**
      * Authenticated admin can access properties list in Filament.
      *
+     * M8-VERIFY fix: the skip was masking a real bug — declaration_type
+     * casts to the DeclarationType enum, but PropertyResource's
+     * formatStateUsing()/color() closures were type-hinted `string`,
+     * which throws a TypeError since Filament passes the enum instance
+     * (see ProtocolResource for the correct pattern). Fixed in
+     * app/Filament/Resources/PropertyResource.php.
+     *
      * @group filament
      */
     public function test_authenticated_user_can_access_properties_list(): void
     {
-        // Filament 5 PropertyResource — требует отдельной отладки
-        // Остальные ресурсы (Protocol, Document, etc.) работают корректно
-        $this->markTestSkipped('Filament 5 PropertyResource UI issue - core logic tested elsewhere');
+        Property::create([
+            'user_id' => $this->user->id,
+            'name' => 'Mieszkanie testowe',
+            'street' => 'ul. Testowa',
+            'building_number' => '1',
+            'city' => 'Warszawa',
+            'postal_code' => '00-001',
+            'declaration_type' => DeclarationType::TENANT_DECLARED,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(PropertyResource::getUrl('index'));
+
+        $response->assertOk();
+        $response->assertSee('Mieszkanie testowe');
     }
 
     /**
@@ -177,7 +196,8 @@ class PropertyTest extends TestCase
      */
     public function test_authenticated_user_can_access_create_property(): void
     {
-        // Filament 5 PropertyResource — требует отдельной отладки
-        $this->markTestSkipped('Filament 5 PropertyResource UI issue - core logic tested elsewhere');
+        $response = $this->actingAs($this->user)->get(PropertyResource::getUrl('create'));
+
+        $response->assertOk();
     }
 }

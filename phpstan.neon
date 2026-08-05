@@ -17,8 +17,17 @@ parameters:
         # HasMany scope methods
         - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\HasMany::#'
         - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Model::#'
-        # Filament classes (version compatibility)
-        - '#Call to static method make\(\) on an unknown class Filament\\#'
+        # M8-VERIFY: removed the blanket "Filament classes (version
+        # compatibility)" ignore for '#Call to static method make() on an
+        # unknown class Filament\#' — that rule was masking the exact
+        # Filament 5 migration bugs fixed this session (Filament\Tables\
+        # Actions\* should be Filament\Actions\*, Filament\Schemas\
+        # Components\{TextInput,Select,...} should be Filament\Forms\
+        # Components\*, Filament\Schemas\Components\TextEntry should be
+        # Filament\Infolists\Components\TextEntry) instead of surfacing
+        # them. Now that the imports are correct, PHPStan reports the
+        # ignore as unused — leaving it in would silently re-mask any
+        # future recurrence of the same mistake.
         # DomPDF facade
         - '#Call to static method loadView\(\) on an unknown class Barryvdh\\DomPDF\\Facade\\Pdf#'
         # Nullsafe on relations (false positive)

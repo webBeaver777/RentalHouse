@@ -7,13 +7,16 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\CatalogItemResource\Pages;
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Select;
 use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Textarea;
-use Filament\Schemas\Components\TextInput;
-use Filament\Schemas\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -53,8 +56,17 @@ class CatalogItemResource extends Resource
 
                         Select::make('parent_id')
                             ->label('Element nadrzędny')
-                            ->relationship('parent', 'name')
-                            ->searchable()
+                            // M8-VERIFY fix: `name` is a translatable jsonb column
+                            // (spatie/laravel-translatable) — Postgres cannot
+                            // ORDER BY jsonb, which is what plain
+                            // relationship('parent', 'name') tries to do
+                            // ("could not identify an ordering operator for
+                            // type json"). No titleAttribute + explicit label
+                            // callback avoids that default ordering/search.
+                            ->relationship(name: 'parent')
+                            ->getOptionLabelFromRecordUsing(
+                                fn (CatalogItem $record): string => $record->getTranslation('name', 'pl')
+                            )
                             ->preload()
                             ->nullable(),
 
@@ -148,11 +160,11 @@ class CatalogItemResource extends Resource
                     ->label('Aktywny'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

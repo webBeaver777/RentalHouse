@@ -59,6 +59,26 @@
 | `access_expires_at` | `access_expires_at` | timestamp | `paid_at + 12 miesięcy` (konfigurowalny) |
 | `retention_until` | `retention_until` | timestamp | `access_expires_at + 3 lata` (RODO) |
 
+### Pola z §13.1, których NIE ma w schemacie (M8-VERIFY, uczciwie nie ukryte)
+
+| Pole ТЗ §13.1 | Status | Uwaga |
+|---------------|--------|-------|
+| `initiator_user_id` | ⚠️ brak kolumny | Inicjator wyrażony pośrednio: `Participant.is_initiator = true` + `Participant.user_id`. Brak osobnej kolumny na `protocols` |
+| `counterparty_email` | ⚠️ brak kolumny | Najbliższy odpowiednik: `Participant.invited_email` (inna nazwa/semantyka) |
+| `counterparty_phone` | ❌ brak w ogóle | Nie znaleziono ani w `protocols`, ani w `participants` — wymaga migracji, jeśli pole jest faktycznie wymagane |
+| `total_damage_cost` | ⚠️ computed, nie kolumna | `Protocol::getTotalDamageCostAttribute()` — suma `estimated_cost` z `protocol_defects`, liczona w locie, nie zapisywana |
+| `amount_to_return` | ⚠️ computed, nie kolumna | `Protocol::getAmountToReturnAttribute()` — `deposit_amount - total_damage_cost`, nie zapisywana |
+| `pdf_status` | ❌ brak w ogóle | PDF generowany synchronicznie (`PdfGenerationService`), bez kolejki i bez pola statusu — dług Fazy 5 M8 |
+
+---
+
+## Akceptacje pozycji (`item_acceptances`) — encja odrębna od `acceptances`
+
+`item_acceptances` i `acceptances` to **dwie różne encje**, nie duplikat:
+
+- `acceptances` — jeden wiersz na podpis/zgodę całego protokołu przez uczestnika (forensyka: `consent_text_snapshot`, `ip_address`, `user_agent`, `device_fingerprint`). Patrz sekcja niżej.
+- `item_acceptances` — jeden wiersz na akceptację/spór **pojedynczej pozycji** (`protocol_items`) przez uczestnika: `status` (`pending`/`accepted`/`disputed`), `dispute_reason`, `resolution_notes`. Używane przy szczegółowej weryfikacji stanu poszczególnych elementów, niezależnie od ogólnego podpisu protokołu.
+
 ---
 
 ## Uczestnicy (`participants`)
