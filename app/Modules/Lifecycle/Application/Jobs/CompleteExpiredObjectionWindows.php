@@ -28,7 +28,7 @@ final class CompleteExpiredObjectionWindows implements ShouldQueue
     {
         $protocols = Protocol::query()
             ->where('type', ProtocolType::CHECK_OUT)
-            ->where('status', ProtocolStatus::SIGNED)
+            ->whereIn('status', [ProtocolStatus::SIGNED, ProtocolStatus::DISPUTED])
             ->whereNotNull('objection_window_ends_at')
             ->where('objection_window_ends_at', '<=', now())
             ->get();
@@ -42,11 +42,12 @@ final class CompleteExpiredObjectionWindows implements ShouldQueue
 
     private function completeProtocol(Protocol $protocol): void
     {
-        // Check for unresolved objections
+        // §21 canon: objection is a one-sided act recorded alongside the protocol,
+        // never a precondition for finalization. An unresolved objection stays
+        // attached to the completed protocol (and the final document) instead of
+        // blocking completion — resolving it is not required.
         if ($protocol->hasUnresolvedObjections()) {
-            Log::warning("Protocol {$protocol->id} has unresolved objections, skipping auto-complete");
-
-            return;
+            Log::info("Protocol {$protocol->id} has unresolved objection(s); completing anyway, objection remains attached");
         }
 
         try {

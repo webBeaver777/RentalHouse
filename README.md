@@ -209,7 +209,7 @@ HARD-GATE: оплата через Przelewy24 создаёт entitlement, кот
   - `lifecycle:process` — каждые 15 минут: архивация протоколов после `access_expires_at` + диспатч джобов `CompleteExpiredObjectionWindows` (закрытие окна возражений check-out → `completed`) и `SendObjectionWindowReminders` (напоминание за 24ч до конца окна — это дедлайн-напоминание из §11, не запрещённая «автонотификация о продлении»)
   - `lifecycle:purge-expired` — ежемесячно: soft-delete после `retention_until`
   - Требует, чтобы `php artisan schedule:work` был запущен в контейнере (см. `docker/supervisord.conf`, `[program:scheduler]`) — иначе команды существуют, но не срабатывают сами
-  - **Открытый вопрос (не исправлено молча)**: `CompleteExpiredObjectionWindows` пропускает авто-завершение, если `hasUnresolvedObjections() === true` — стоит сверить с § 21 («возражение не блокирует акт»), т.к. на этой стадии протокол уже `SIGNED`/`act_issued_at` заполнен, и завершение перехода в `completed`, возможно, не должно ждать разрешения возражения
+  - **Решено (guard 13, M9)**: `CompleteExpiredObjectionWindows` раньше пропускал авто-завершение при незакрытом возражении (`hasUnresolvedObjections() === true`) и не подхватывал `DISPUTED`-протоколы в выборке (только `SIGNED`) — двойная блокировка нарушала § 21 («возражение не блокирует акт»). Обе стороны сняты: выборка включает `SIGNED` и `DISPUTED`, незакрытое возражение больше не останавливает `complete()` — оно остаётся прикреплённым к завершённому протоколу для финального документа
 
 ### Catalog
 Каталог комнат и элементов с translatable JSON, заморозка snapshot при создании протокола.
@@ -249,7 +249,7 @@ make artisan CMD="test --coverage"
 
 ### Стражи (Guards)
 
-Система содержит 12 критических стражей, покрытых тестами:
+Система содержит 13 критических стражей, покрытых тестами:
 
 | # | Страж | Описание |
 |---|-------|----------|
@@ -265,6 +265,7 @@ make artisan CMD="test --coverage"
 | 10 | Photo hash | Фото в MinIO с SHA-256 |
 | 11 | Checkout asymmetry | Check-out не симметричен |
 | 12 | HARD-GATE | Entitlement требуется для PDF |
+| 13 | Objection non-blocking | Незакрытое возражение не блокирует завершение check-out (`CompleteExpiredObjectionWindows`) |
 
 ## Развёртывание в production
 

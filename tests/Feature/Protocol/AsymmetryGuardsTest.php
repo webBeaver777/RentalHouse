@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Protocol;
 
+use App\Modules\Acceptance\Application\Actions\RaiseObjectionAction;
 use App\Modules\Acceptance\Application\Actions\SignProtocolAction;
 use App\Modules\Acceptance\Infrastructure\Models\Acceptance;
 use App\Modules\Billing\Domain\Enums\AllowedAction;
@@ -19,6 +20,7 @@ use App\Modules\Document\Infrastructure\Models\GeneratedDocument;
 use App\Modules\Evidence\Application\Services\EvidenceUploadService;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Lifecycle\Application\Jobs\CompleteExpiredObjectionWindows;
 use App\Modules\Notification\Domain\Events\ParticipantInvited;
 use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Participation\Infrastructure\Models\Participant;
@@ -796,6 +798,69 @@ class AsymmetryGuardsTest extends TestCase
         // Try to finalize without entitlement - should throw
         $this->expectException(EntitlementRequiredException::class);
         $action->execute($protocol);
+    }
+
+    /**
+     * §21 guard 13: An unresolved objection does NOT block checkout completion.
+     *
+     * Objection is a one-sided act recorded alongside the protocol, never a
+     * precondition for finalization ("вторая сторона должна разрешить" is a
+     * forbidden pattern at the completion layer).
+     *
+     * Дано: CHECK_OUT, act_issued_at установлен, objection_window_ends_at <= now,
+     * возражение поднято и НЕ закрыто (protocol transitioned SIGNED -> DISPUTED
+     * by RaiseObjectionAction, mirroring the real transition path exercised in
+     * ObjectionFlowTest::test_objection_transitions_protocol_to_disputed).
+     * Когда: CompleteExpiredObjectionWindows отрабатывает.
+     * Тогда: протокол -> completed; возражение сохранено, прикреплено и по-прежнему
+     * unresolved (резолюция объекции — НЕ предусловие завершения).
+     */
+    public function test_guard_13_checkout_completes_despite_unresolved_objection(): void
+    {
+        $protocol = $this->createCheckOutProtocol();
+        $this->addParticipants($protocol);
+        $protocol->initiator()->sign();
+
+        $this->giveEntitlement($this->landlord, AllowedAction::CREATE_CHECK_OUT);
+
+        $issueAction = app(IssueCheckOutAction::class);
+        $protocol = $issueAction->execute($protocol, objectionWindowHours: 72);
+
+        // IssueCheckOutAction completes the protocol immediately on issuance.
+        // Roll back to SIGNED to exercise the intermediate state that
+        // RaiseObjectionAction's SIGNED -> DISPUTED transition (and this job)
+        // are designed for — same convention as ObjectionFlowTest already uses.
+        $protocol->update(['status' => ProtocolStatus::SIGNED]);
+
+        $counterparty = $protocol->counterparty();
+        $objectionAction = app(RaiseObjectionAction::class);
+        $objection = $objectionAction->execute(
+            $protocol,
+            $counterparty,
+            'Nie zgadzam się ze stanem łazienki.'
+        );
+
+        $protocol->refresh();
+        $this->assertEquals(ProtocolStatus::DISPUTED, $protocol->status);
+        $this->assertTrue($objection->isPending());
+
+        // Objection window has expired.
+        $protocol->update(['objection_window_ends_at' => now()->subMinute()]);
+
+        (new CompleteExpiredObjectionWindows)->handle();
+
+        $protocol->refresh();
+        $this->assertEquals(ProtocolStatus::COMPLETED, $protocol->status);
+        $this->assertNotNull($protocol->act_issued_at);
+
+        // Objection remains attached to the completed protocol, unresolved,
+        // available for the final document — resolution is not a precondition.
+        $objection->refresh();
+        $this->assertTrue($objection->isPending());
+        $this->assertDatabaseHas('protocol_objections', [
+            'id' => $objection->id,
+            'protocol_id' => $protocol->id,
+        ]);
     }
 
     // === Helper Methods ===
