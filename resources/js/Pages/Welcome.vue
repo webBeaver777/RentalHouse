@@ -23,11 +23,11 @@ defineProps({
                     <span class="text-2xl font-bold text-white">Rent2Proof</span>
                 </div>
                 <div class="flex items-center gap-4">
-                    <a href="/admin" class="px-4 py-2 text-slate-300 hover:text-white transition">
+                    <a :href="route('login')" class="px-4 py-2 text-slate-300 hover:text-white transition">
                         Zaloguj się
                     </a>
-                    <a href="/admin" class="px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium">
-                        Panel admina
+                    <a :href="route('register')" class="px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium">
+                        Zarejestruj się
                     </a>
                 </div>
             </nav>
@@ -54,8 +54,8 @@ defineProps({
                 </p>
 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <a href="/admin" class="px-8 py-4 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition font-semibold text-lg shadow-lg shadow-emerald-500/25">
-                        Rozpocznij za darmo
+                    <a :href="route('register')" class="px-8 py-4 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition font-semibold text-lg shadow-lg shadow-emerald-500/25">
+                        Utwórz protokół
                     </a>
                     <a href="#features" class="px-8 py-4 bg-slate-700 text-white rounded-xl hover:bg-slate-600 transition font-semibold text-lg">
                         Zobacz funkcje

@@ -64,3 +64,20 @@ Route::prefix('payment')->name('payment.')->group(function (): void {
 Route::get('/invitation/{token}', function (string $token) {
     return Inertia::render('Invitation/Accept', ['token' => $token]);
 })->name('invitation.accept');
+
+/*
+|--------------------------------------------------------------------------
+| M8 Phase 2: Cabinet (kabinet) placeholder
+|--------------------------------------------------------------------------
+| Landing spot after login/registration. Full property list + protocol
+| history is Phase 3 scope — this is the minimal real page GATE 2 needs
+| to make "zarejestrował się → wpadł do kabinetu" an actual, testable
+| route rather than a dead end.
+*/
+Route::middleware('auth')->group(function (): void {
+    Route::get('/dashboard', function () {
+        return Inertia::render('Dashboard');
+    })->name('dashboard');
+});
+
+require __DIR__.'/auth.php';
