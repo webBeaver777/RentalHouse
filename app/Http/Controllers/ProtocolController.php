@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Modules\Catalog\Domain\Enums\CatalogItemType;
+use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
 use App\Modules\Property\Infrastructure\Models\Property;
+use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use App\Modules\Protocol\Infrastructure\Models\ProtocolItem;
+use App\Modules\Protocol\Infrastructure\Models\ProtocolRoom;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,16 +20,17 @@ use Inertia\Response;
 
 /**
  * M10.1, Scenario A slice: check-in protocol creation entry point from
- * an existing property.
+ * an existing property. M10.2 extends show() with rooms/items + catalog
+ * pickers (mutations live in ProtocolRoomController/ProtocolItemController).
  *
- * Scope strictly: property -> draft check-in protocol -> draft show.
- * Backend (Protocol model, ProtocolType, state machine) is frozen and
- * already covered by ProtocolTest / ProtocolStateMachineTest /
- * AsymmetricStateMachineTest — this controller only wires UI + routes,
- * the same shape as PropertyController::store.
+ * Backend (Protocol model, ProtocolType, state machine, ProtocolRoom,
+ * ProtocolItem, catalog) is frozen and already covered by ProtocolTest /
+ * ProtocolStateMachineTest / AsymmetricStateMachineTest / ProtocolRoomItemTest
+ * — this controller only wires UI + routes, the same shape as
+ * PropertyController::store.
  *
- * NOT in this slice: rooms/items, photos, payment/gate, submit to
- * counterparty, signatures, finalize, PDF, magic-link (M10.2-M10.5).
+ * NOT in this slice: photos, payment/gate, submit to counterparty,
+ * signatures, finalize, PDF, magic-link (M10.3-M10.5).
  */
 final class ProtocolController extends Controller
 {
@@ -74,7 +80,13 @@ final class ProtocolController extends Controller
     {
         abort_unless($protocol->created_by_user_id === Auth::id(), 403);
 
-        $protocol->loadMissing(['property', 'createdBy']);
+        $protocol->loadMissing([
+            'property',
+            'createdBy',
+            'rooms.catalogItem',
+            'rooms.items.catalogItem',
+            'rooms.items.condition',
+        ]);
 
         return Inertia::render('Protocol/Show', [
             'protocol' => [
@@ -84,13 +96,48 @@ final class ProtocolController extends Controller
                 'status' => $protocol->status->value,
                 'status_label' => $protocol->status->label(),
                 'title' => $protocol->title,
+                'is_draft' => $protocol->status === ProtocolStatus::DRAFT,
                 'property' => [
                     'name' => $protocol->property->name,
                     'full_address' => $protocol->property->full_address,
                 ],
                 'initiator_name' => $protocol->createdBy->name,
                 'created_at' => $protocol->created_at?->toIso8601String(),
+                'rooms' => $protocol->rooms->map(fn (ProtocolRoom $room) => [
+                    'id' => $room->id,
+                    'display_name' => $room->display_name,
+                    'catalog_item_id' => $room->catalog_item_id,
+                    'custom_name' => $room->custom_name,
+                    'items' => $room->items->map(fn (ProtocolItem $item) => [
+                        'id' => $item->id,
+                        'display_name' => $item->display_name,
+                        'catalog_item_id' => $item->catalog_item_id,
+                        'condition_catalog_item_id' => $item->condition_catalog_item_id,
+                        'condition_name' => $item->condition_name,
+                        'custom_name' => $item->custom_name,
+                        'quantity' => $item->quantity,
+                    ])->values()->all(),
+                ])->values()->all(),
+            ],
+            'catalogs' => [
+                'room_types' => $this->catalogOptions(CatalogItemType::ROOM),
+                'item_templates' => $this->catalogOptions(CatalogItemType::ITEM),
+                'condition_states' => $this->catalogOptions(CatalogItemType::CONDITION),
             ],
         ]);
+    }
+
+    /**
+     * @return array<int, array{id: int, label: string}>
+     */
+    private function catalogOptions(CatalogItemType $type): array
+    {
+        return CatalogItem::ofType($type)
+            ->active()
+            ->orderBy('sort_order')
+            ->get()
+            ->map(fn (CatalogItem $item) => ['id' => $item->id, 'label' => $item->name])
+            ->values()
+            ->all();
     }
 }

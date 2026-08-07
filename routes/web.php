@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProtocolController;
+use App\Http\Controllers\ProtocolItemController;
+use App\Http\Controllers\ProtocolRoomController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -103,6 +105,23 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/create', [ProtocolController::class, 'create'])->name('create');
         Route::post('/', [ProtocolController::class, 'store'])->name('store');
         Route::get('/{protocol}', [ProtocolController::class, 'show'])->name('show');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.2, Scenario A slice: rooms + items CRUD on a draft check-in
+    | protocol (draft-only + initiator guard — see
+    | AuthorizesDraftProtocolMutation).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/rooms', [ProtocolRoomController::class, 'store'])->name('rooms.store');
+        Route::put('/rooms/{room}', [ProtocolRoomController::class, 'update'])->name('rooms.update');
+        Route::delete('/rooms/{room}', [ProtocolRoomController::class, 'destroy'])->name('rooms.destroy');
+
+        Route::post('/rooms/{room}/items', [ProtocolItemController::class, 'store'])->name('rooms.items.store');
+        Route::put('/rooms/{room}/items/{item}', [ProtocolItemController::class, 'update'])->name('rooms.items.update');
+        Route::delete('/rooms/{room}/items/{item}', [ProtocolItemController::class, 'destroy'])->name('rooms.items.destroy');
     });
 
     /*
