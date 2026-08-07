@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\PropertyController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -78,6 +80,28 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
+
+    /*
+    |----------------------------------------------------------------
+    | M10 GATE 2, Scenario A slice: Properties (public, own-only)
+    |----------------------------------------------------------------
+    */
+    Route::prefix('properties')->name('properties.')->group(function (): void {
+        Route::get('/', [PropertyController::class, 'index'])->name('index');
+        Route::get('/create', [PropertyController::class, 'create'])->name('create');
+        Route::post('/', [PropertyController::class, 'store'])->name('store');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10 GATE 2: Billing / entitlements (dev-grant stands in for P24
+    | until the real Przelewy24 slice lands — see BillingController).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('billing')->name('billing.')->group(function (): void {
+        Route::get('/', [BillingController::class, 'index'])->name('index');
+        Route::post('/dev-grant', [BillingController::class, 'devGrant'])->name('dev-grant');
+    });
 });
 
 require __DIR__.'/auth.php';
