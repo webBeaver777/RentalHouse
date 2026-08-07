@@ -51,15 +51,28 @@ const status = computed(() => page.props.flash?.status ?? page.props.status);
                 <div
                     v-for="property in properties"
                     :key="property.id"
-                    class="p-5 flex items-center justify-between"
+                    class="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
-                    <div>
-                        <p class="font-medium text-slate-900">{{ property.name }}</p>
-                        <p class="text-sm text-slate-500">{{ property.full_address }}</p>
+                    <div class="flex items-center justify-between sm:block gap-3">
+                        <div>
+                            <p class="font-medium text-slate-900">{{ property.name }}</p>
+                            <p class="text-sm text-slate-500">{{ property.full_address }}</p>
+                        </div>
+                        <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full sm:hidden">
+                            {{ property.declaration_type_label }}
+                        </span>
                     </div>
-                    <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full">
-                        {{ property.declaration_type_label }}
-                    </span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full hidden sm:inline-block">
+                            {{ property.declaration_type_label }}
+                        </span>
+                        <Link
+                            :href="route('protocols.create', { property_id: property.id })"
+                            class="px-3.5 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm whitespace-nowrap"
+                        >
+                            Utwórz protokół wjazdu
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

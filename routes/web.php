@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\ProtocolController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -90,6 +91,18 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', [PropertyController::class, 'index'])->name('index');
         Route::get('/create', [PropertyController::class, 'create'])->name('create');
         Route::post('/', [PropertyController::class, 'store'])->name('store');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.1, Scenario A slice: check-in protocol creation from an
+    | existing property (draft only — see ProtocolController).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols')->name('protocols.')->group(function (): void {
+        Route::get('/create', [ProtocolController::class, 'create'])->name('create');
+        Route::post('/', [ProtocolController::class, 'store'])->name('store');
+        Route::get('/{protocol}', [ProtocolController::class, 'show'])->name('show');
     });
 
     /*
