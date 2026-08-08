@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * M10.2 KRYTYCZNY GUARD: room/item structure on a protocol may only be
- * mutated while it is still draft, and only by its initiator.
+ * mutated while it is still draft, and only by its initiator. M10.4 reuses
+ * this same draft-only + initiator check for submitting to the counterparty
+ * (with a submit-specific message).
  *
  * This is the backend enforcement of the immutability boundary — hiding
  * buttons in the UI is not enough, every mutating controller action must
@@ -18,14 +20,14 @@ use Illuminate\Support\Facades\Auth;
  */
 trait AuthorizesDraftProtocolMutation
 {
-    protected function assertMutable(Protocol $protocol): void
+    protected function assertMutable(Protocol $protocol, ?string $message = null): void
     {
         abort_unless($protocol->created_by_user_id === Auth::id(), 403);
 
         abort_unless(
             $protocol->status === ProtocolStatus::DRAFT,
             422,
-            'Struktura protokołu może być zmieniana tylko w statusie „Szkic”.'
+            $message ?? 'Struktura protokołu może być zmieniana tylko w statusie „Szkic”.'
         );
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\ProtocolEvidenceController;
 use App\Http\Controllers\ProtocolItemController;
 use App\Http\Controllers\ProtocolItemPhotoController;
 use App\Http\Controllers\ProtocolRoomController;
+use App\Http\Controllers\ProtocolSubmitController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -142,6 +143,18 @@ Route::middleware('auth')->group(function (): void {
             ->name('rooms.items.photos.store');
         Route::delete('/rooms/{room}/items/{item}/photos/{evidence}', [ProtocolItemPhotoController::class, 'destroy'])
             ->name('rooms.items.photos.destroy');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.4, Scenario A slice: submit a draft check-in protocol to the
+    | counterparty. Hard-gated on a real, consumed entitlement (see
+    | ProtocolSubmitController — no new gate, wires InvitationService's
+    | existing one).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/submit', [ProtocolSubmitController::class, 'store'])->name('submit');
     });
 
     /*

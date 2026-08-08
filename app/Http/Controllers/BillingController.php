@@ -6,11 +6,9 @@ namespace App\Http\Controllers;
 
 use App\Modules\Billing\Application\Services\EntitlementService;
 use App\Modules\Billing\Domain\Enums\ProductCode;
-use App\Modules\Billing\Infrastructure\Models\Entitlement;
 use App\Modules\Identity\Infrastructure\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,9 +23,12 @@ use Inertia\Response;
  * routes/web.php still only has unwired /payment/sandbox and /payment/return
  * placeholders — no controller creates a Payment record yet. This lets
  * Scenario A be exercised end-to-end in dev without a live P24 sandbox.
- * Replace with EntitlementService::createEntitlementFromPayment() driven by
- * a real Payment once the P24 slice lands; devGrant is 404'd outside
- * non-production environments as a guardrail until then.
+ * M10.4: it now goes through EntitlementService::createDevEntitlement(),
+ * the SAME emitter createEntitlementFromPayment() uses — previously this
+ * duplicated the Entitlement::create() call inline, which would have let
+ * dev and prod entitlement shapes drift. Replace this whole method with a
+ * real Payment-driven call once the P24 slice lands; devGrant is 404'd
+ * outside non-production environments as a guardrail until then.
  */
 final class BillingController extends Controller
 {
@@ -46,7 +47,7 @@ final class BillingController extends Controller
         ]);
     }
 
-    public function devGrant(Request $request): RedirectResponse
+    public function devGrant(Request $request, EntitlementService $entitlementService): RedirectResponse
     {
         abort_if(app()->environment('production'), 404);
 
@@ -55,21 +56,25 @@ final class BillingController extends Controller
                 'required',
                 Rule::in(array_map(fn (ProductCode $code) => $code->value, ProductCode::mvpProducts())),
             ],
+            // Optional: bounce back to the protocol that requested the payment
+            // (used by the "Zapłać (dev)" button on Protocol/Show.vue) instead
+            // of the billing index. Built into a route URL server-side —
+            // never redirects to an arbitrary external URL.
+            'protocol_id' => ['nullable', 'uuid'],
         ]);
 
         $productCode = ProductCode::from($validated['product_code']);
 
-        Entitlement::create([
-            'user_id' => Auth::id(),
-            'product_code' => $productCode,
-            'allowed_action' => $productCode->allowedAction(),
-            'quantity_total' => 1,
-            'quantity_used' => 0,
-            'valid_until' => now()->addMonth(),
-            'activated_at' => now(),
-        ]);
+        /** @var User $user */
+        $user = $request->user();
 
-        return redirect()->route('billing.index')
+        $entitlementService->createDevEntitlement($user, $productCode);
+
+        $redirectTo = isset($validated['protocol_id'])
+            ? route('protocols.show', $validated['protocol_id'])
+            : route('billing.index');
+
+        return redirect($redirectTo)
             ->with('status', 'Dostęp (dev) przyznany: '.$productCode->label());
     }
 }

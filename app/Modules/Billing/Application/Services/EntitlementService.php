@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Billing\Application\Services;
 
 use App\Modules\Billing\Domain\Enums\AllowedAction;
+use App\Modules\Billing\Domain\Enums\ProductCode;
 use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
 use App\Modules\Billing\Infrastructure\Models\Entitlement;
 use App\Modules\Billing\Infrastructure\Models\EntitlementUsage;
@@ -12,6 +13,7 @@ use App\Modules\Billing\Infrastructure\Models\Payment;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Lifecycle\Application\Services\LifecycleService;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use Illuminate\Support\Carbon;
 
 /**
  * D2/D3: Entitlement service with HARD-GATING.
@@ -123,19 +125,42 @@ final class EntitlementService
      */
     public function createEntitlementFromPayment(Payment $payment): Entitlement
     {
-        $action = $payment->product_code->allowedAction();
-
         // Default validity: 12 months from payment
         $validUntil = $payment->paid_at?->addMonths(12) ?? now()->addMonths(12);
 
+        return $this->emitEntitlement($payment->user_id, $payment->product_code, $validUntil, $payment->id);
+    }
+
+    /**
+     * M10.4: dev/stand-in path for issuing an entitlement without a real
+     * Payment record (P24 sandbox isn't wired yet — see BillingController's
+     * devGrant). Goes through the SAME emitter as a real webhook-driven
+     * payment (createEntitlementFromPayment) so dev and prod entitlements
+     * never drift in shape — only source_payment_id differs (null here).
+     */
+    public function createDevEntitlement(User $user, ProductCode $productCode): Entitlement
+    {
+        return $this->emitEntitlement($user->id, $productCode, now()->addMonths(12));
+    }
+
+    /**
+     * Single point of entitlement creation — both the real payment path and
+     * the dev stand-in funnel through here.
+     */
+    private function emitEntitlement(
+        int|string $userId,
+        ProductCode $productCode,
+        Carbon $validUntil,
+        int|string|null $sourcePaymentId = null,
+    ): Entitlement {
         return Entitlement::create([
-            'user_id' => $payment->user_id,
-            'product_code' => $payment->product_code,
-            'allowed_action' => $action,
+            'user_id' => $userId,
+            'product_code' => $productCode,
+            'allowed_action' => $productCode->allowedAction(),
             'quantity_total' => 1,
             'quantity_used' => 0,
             'valid_until' => $validUntil,
-            'source_payment_id' => $payment->id,
+            'source_payment_id' => $sourcePaymentId,
             'activated_at' => now(),
         ]);
     }

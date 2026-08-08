@@ -158,6 +158,30 @@ function deletePhoto(room, item, photo) {
         preserveScroll: true,
     });
 }
+
+/* --- dev payment (stub for real Przelewy24 flow) --- */
+const payForm = useForm({
+    product_code: 'WJAZD',
+    protocol_id: props.protocol.id,
+});
+
+function submitPay() {
+    payForm.post(route('billing.dev-grant'), { preserveScroll: true });
+}
+
+/* --- submit to counterparty (hard-gated on entitlement server-side) --- */
+const submitOpen = ref(false);
+const submitForm = useForm({ counterparty_email: '' });
+
+function submitToCounterparty() {
+    submitForm.post(route('protocols.submit', props.protocol.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            submitForm.reset();
+            submitOpen.value = false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -196,7 +220,79 @@ function deletePhoto(room, item, photo) {
                     <dt class="text-sm text-slate-500">Inicjator</dt>
                     <dd class="text-sm font-medium text-slate-900">{{ protocol.initiator_name }}</dd>
                 </div>
+                <div class="p-5 flex items-center justify-between gap-4">
+                    <dt class="text-sm text-slate-500">Dostęp (opłata)</dt>
+                    <dd class="text-sm font-medium" :class="protocol.has_entitlement ? 'text-emerald-600' : 'text-slate-400'">
+                        {{ protocol.has_entitlement ? 'Opłacono' : 'Nieopłacono' }}
+                    </dd>
+                </div>
             </dl>
+
+            <!-- Payment + submit to counterparty -->
+            <div v-if="protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                <h2 class="text-lg font-bold text-slate-900">Płatność i wysyłka</h2>
+
+                <div v-if="!protocol.has_entitlement">
+                    <p class="text-sm text-slate-600 mb-2">Wysłanie protokołu do drugiej strony wymaga opłaty.</p>
+                    <form v-if="protocol.dev_mode_available" @submit.prevent="submitPay">
+                        <button
+                            type="submit"
+                            :disabled="payForm.processing"
+                            class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium text-sm disabled:opacity-50"
+                        >
+                            Zapłać (dev)
+                        </button>
+                    </form>
+                </div>
+                <p v-else class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                    Dostęp opłacony — możesz wysłać protokół do drugiej strony.
+                </p>
+
+                <div>
+                    <button
+                        v-if="!submitOpen"
+                        type="button"
+                        @click="submitOpen = true"
+                        class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm"
+                    >
+                        Wyślij do drugiej strony
+                    </button>
+
+                    <form v-else @submit.prevent="submitToCounterparty" class="space-y-2 mt-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">E-mail drugiej strony</label>
+                        <input
+                            v-model="submitForm.counterparty_email"
+                            type="email"
+                            required
+                            placeholder="np. najemca@example.com"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <p v-if="submitForm.errors.counterparty_email" class="text-sm text-red-600">{{ submitForm.errors.counterparty_email }}</p>
+                        <div class="flex items-center gap-3">
+                            <button
+                                type="submit"
+                                :disabled="submitForm.processing"
+                                class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
+                            >
+                                Wyślij
+                            </button>
+                            <button type="button" @click="submitOpen = false" class="text-sm text-slate-500 hover:text-slate-700">
+                                Anuluj
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div v-if="protocol.magic_link" class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <p class="text-sm font-medium text-amber-900 mb-1">Magic-link dla drugiej strony (dev)</p>
+                <p class="text-xs text-amber-800 mb-2">
+                    W produkcji zostanie wysłany e-mailem — tutaj widoczny tylko w trybie dev.
+                </p>
+                <a :href="protocol.magic_link" target="_blank" class="text-sm text-emerald-700 hover:text-emerald-800 break-all underline">
+                    {{ protocol.magic_link }}
+                </a>
+            </div>
 
             <!-- Rooms -->
             <div class="mt-8 flex items-center justify-between gap-3">

@@ -6,6 +6,10 @@ namespace Tests\Feature\Billing;
 
 use App\Modules\Billing\Domain\Enums\AllowedAction;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Property\Domain\Enums\DeclarationType;
+use App\Modules\Property\Infrastructure\Models\Property;
+use App\Modules\Protocol\Domain\Enums\ProtocolType;
+use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -98,5 +102,36 @@ class BillingHttpTest extends TestCase
 
         $response->assertRedirect(route('login'));
         $this->assertDatabaseCount('entitlements', 0);
+    }
+
+    /**
+     * M10.4: "Zapłać (dev)" on Protocol/Show.vue passes protocol_id so the
+     * dev-grant bounces back to the protocol instead of the billing index.
+     */
+    public function test_dev_grant_redirects_back_to_protocol_when_protocol_id_given(): void
+    {
+        $property = Property::create([
+            'user_id' => $this->user->id,
+            'name' => 'Mieszkanie Testowe',
+            'street' => 'ul. Testowa',
+            'building_number' => '1',
+            'city' => 'Warszawa',
+            'postal_code' => '00-001',
+            'declaration_type' => DeclarationType::OWNER,
+        ]);
+
+        $protocol = Protocol::create([
+            'property_id' => $property->id,
+            'created_by_user_id' => $this->user->id,
+            'type' => ProtocolType::CHECK_IN,
+            'title' => 'Protokół wjazdu',
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('billing.dev-grant'), [
+            'product_code' => 'WJAZD',
+            'protocol_id' => $protocol->id,
+        ]);
+
+        $response->assertRedirect(route('protocols.show', $protocol));
     }
 }

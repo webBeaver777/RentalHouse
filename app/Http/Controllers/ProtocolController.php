@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Modules\Billing\Application\Services\EntitlementService;
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
+use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Property\Infrastructure\Models\Property;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
@@ -25,16 +27,19 @@ use Inertia\Response;
  * pickers (mutations live in ProtocolRoomController/ProtocolItemController).
  * M10.3 extends it further with per-item photo evidence (mutations live in
  * ProtocolItemPhotoController, serving in ProtocolEvidenceController).
+ * M10.4 extends it with entitlement/dev-magic-link status for the payment
+ * + submit-to-counterparty step (mutation lives in ProtocolSubmitController;
+ * dev-grant in BillingController).
  *
  * Backend (Protocol model, ProtocolType, state machine, ProtocolRoom,
- * ProtocolItem, catalog, Evidence) is frozen and already covered by
- * ProtocolTest / ProtocolStateMachineTest / AsymmetricStateMachineTest /
- * ProtocolRoomItemTest / EvidenceTest / EvidenceUploadServiceTest — this
- * controller only wires UI + routes, the same shape as
- * PropertyController::store.
+ * ProtocolItem, catalog, Evidence, EntitlementService) is frozen and
+ * already covered by ProtocolTest / ProtocolStateMachineTest /
+ * AsymmetricStateMachineTest / ProtocolRoomItemTest / EvidenceTest /
+ * EvidenceUploadServiceTest / HardGateTest — this controller only wires
+ * UI + routes, the same shape as PropertyController::store.
  *
- * NOT in this slice: payment/gate, submit to counterparty, signatures,
- * finalize, PDF, magic-link (M10.4-M10.5).
+ * NOT in this slice: guest acceptance, signatures, finalize, PDF, QR,
+ * real email delivery (M10.5+).
  */
 final class ProtocolController extends Controller
 {
@@ -80,7 +85,7 @@ final class ProtocolController extends Controller
         return redirect()->route('protocols.show', $protocol);
     }
 
-    public function show(Protocol $protocol): Response
+    public function show(Protocol $protocol, EntitlementService $entitlementService): Response
     {
         abort_unless($protocol->created_by_user_id === Auth::id(), 403);
 
@@ -93,6 +98,11 @@ final class ProtocolController extends Controller
             'rooms.items.photos',
         ]);
 
+        /** @var User $user */
+        $user = Auth::user();
+        $requiredAction = EntitlementService::getRequiredAction($protocol);
+        $isDraft = $protocol->status === ProtocolStatus::DRAFT;
+
         return Inertia::render('Protocol/Show', [
             'protocol' => [
                 'id' => $protocol->id,
@@ -101,7 +111,10 @@ final class ProtocolController extends Controller
                 'status' => $protocol->status->value,
                 'status_label' => $protocol->status->label(),
                 'title' => $protocol->title,
-                'is_draft' => $protocol->status === ProtocolStatus::DRAFT,
+                'is_draft' => $isDraft,
+                'has_entitlement' => $entitlementService->hasEntitlement($user, $requiredAction),
+                'dev_mode_available' => ! app()->environment('production'),
+                'magic_link' => ! app()->environment('production') ? ($protocol->metadata['dev_magic_link'] ?? null) : null,
                 'property' => [
                     'name' => $protocol->property->name,
                     'full_address' => $protocol->property->full_address,
