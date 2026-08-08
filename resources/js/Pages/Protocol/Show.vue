@@ -182,6 +182,24 @@ function submitToCounterparty() {
         },
     });
 }
+
+/* --- initiator sign (guest side lives on Invitation/Accept.vue) --- */
+function buildDeviceFingerprint() {
+    try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        return `${navigator.userAgent} | ${screen.width}x${screen.height} | ${tz}`.slice(0, 255);
+    } catch {
+        return navigator.userAgent.slice(0, 255);
+    }
+}
+
+const signForm = useForm({ device_fingerprint: '' });
+
+function submitSign() {
+    signForm.device_fingerprint = buildDeviceFingerprint();
+    signForm.post(route('protocols.sign', props.protocol.id), { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -225,6 +243,10 @@ function submitToCounterparty() {
                     <dd class="text-sm font-medium" :class="protocol.has_entitlement ? 'text-emerald-600' : 'text-slate-400'">
                         {{ protocol.has_entitlement ? 'Opłacono' : 'Nieopłacono' }}
                     </dd>
+                </div>
+                <div v-if="protocol.counterparty_status_label" class="p-5 flex items-center justify-between gap-4">
+                    <dt class="text-sm text-slate-500">Druga strona</dt>
+                    <dd class="text-sm font-medium text-slate-900">{{ protocol.counterparty_status_label }}</dd>
                 </div>
             </dl>
 
@@ -292,6 +314,29 @@ function submitToCounterparty() {
                 <a :href="protocol.magic_link" target="_blank" class="text-sm text-emerald-700 hover:text-emerald-800 break-all underline">
                     {{ protocol.magic_link }}
                 </a>
+            </div>
+
+            <!-- Sign (after being sent — draft-only send form above no longer applies) -->
+            <div v-if="!protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                <h2 class="text-lg font-bold text-slate-900">Podpis</h2>
+
+                <p v-if="protocol.initiator_signed" class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                    Podpisałeś/aś ten protokół.
+                </p>
+
+                <form v-else-if="protocol.can_sign" @submit.prevent="submitSign">
+                    <p class="text-sm text-slate-600 mb-3">Potwierdź podpis protokołu jako inicjator.</p>
+                    <p v-if="signForm.errors.sign" class="mb-2 text-sm text-red-600">{{ signForm.errors.sign }}</p>
+                    <button
+                        type="submit"
+                        :disabled="signForm.processing"
+                        class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
+                    >
+                        Podpisz
+                    </button>
+                </form>
+
+                <p v-else class="text-sm text-slate-500">Podpis niedostępny w bieżącym statusie protokołu.</p>
             </div>
 
             <!-- Rooms -->

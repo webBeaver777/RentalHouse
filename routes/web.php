@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProtocolController;
 use App\Http\Controllers\ProtocolEvidenceController;
 use App\Http\Controllers\ProtocolItemController;
 use App\Http\Controllers\ProtocolItemPhotoController;
 use App\Http\Controllers\ProtocolRoomController;
+use App\Http\Controllers\ProtocolSignController;
 use App\Http\Controllers\ProtocolSubmitController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
@@ -66,12 +68,15 @@ Route::prefix('payment')->name('payment.')->group(function (): void {
 
 /*
 |--------------------------------------------------------------------------
-| Invitation Routes (Magic Link)
+| M10.5, Scenario A slice: Invitation Routes (Magic Link, unauthenticated)
 |--------------------------------------------------------------------------
+| Guest (no account) access is gated purely by the token hash comparison
+| already built into InvitationToken/InvitationService (G3) — see
+| GuestInvitationController.
 */
-Route::get('/invitation/{token}', function (string $token) {
-    return Inertia::render('Invitation/Accept', ['token' => $token]);
-})->name('invitation.accept');
+Route::get('/invitation/{token}', [GuestInvitationController::class, 'show'])->name('invitation.accept');
+Route::post('/invitation/{token}/sign', [GuestInvitationController::class, 'sign'])->name('invitation.sign');
+Route::get('/invitation/{token}/evidence/{evidence}', [GuestInvitationController::class, 'evidence'])->name('invitation.evidence');
 
 /*
 |--------------------------------------------------------------------------
@@ -155,6 +160,16 @@ Route::middleware('auth')->group(function (): void {
     */
     Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
         Route::post('/submit', [ProtocolSubmitController::class, 'store'])->name('submit');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.5, Scenario A slice: initiator signs (wires the same frozen
+    | SignProtocolAction the guest flow uses — see ProtocolSignController).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/sign', [ProtocolSignController::class, 'store'])->name('sign');
     });
 
     /*

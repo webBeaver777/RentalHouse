@@ -29,17 +29,19 @@ use Inertia\Response;
  * ProtocolItemPhotoController, serving in ProtocolEvidenceController).
  * M10.4 extends it with entitlement/dev-magic-link status for the payment
  * + submit-to-counterparty step (mutation lives in ProtocolSubmitController;
- * dev-grant in BillingController).
+ * dev-grant in BillingController). M10.5 extends it with the initiator's
+ * own sign status (mutation lives in ProtocolSignController; guest side in
+ * GuestInvitationController).
  *
  * Backend (Protocol model, ProtocolType, state machine, ProtocolRoom,
- * ProtocolItem, catalog, Evidence, EntitlementService) is frozen and
- * already covered by ProtocolTest / ProtocolStateMachineTest /
+ * ProtocolItem, catalog, Evidence, EntitlementService, SignProtocolAction)
+ * is frozen and already covered by ProtocolTest / ProtocolStateMachineTest /
  * AsymmetricStateMachineTest / ProtocolRoomItemTest / EvidenceTest /
- * EvidenceUploadServiceTest / HardGateTest — this controller only wires
- * UI + routes, the same shape as PropertyController::store.
+ * EvidenceUploadServiceTest / HardGateTest / ParticipantTest /
+ * AcceptanceTest — this controller only wires UI + routes, the same shape
+ * as PropertyController::store.
  *
- * NOT in this slice: guest acceptance, signatures, finalize, PDF, QR,
- * real email delivery (M10.5+).
+ * NOT in this slice: finalize, PDF, QR, real email delivery (M10.6+).
  */
 final class ProtocolController extends Controller
 {
@@ -96,12 +98,19 @@ final class ProtocolController extends Controller
             'rooms.items.catalogItem',
             'rooms.items.condition',
             'rooms.items.photos',
+            'participants',
         ]);
 
         /** @var User $user */
         $user = Auth::user();
         $requiredAction = EntitlementService::getRequiredAction($protocol);
         $isDraft = $protocol->status === ProtocolStatus::DRAFT;
+
+        $initiatorParticipant = $protocol->participants->firstWhere('user_id', $user->id);
+        $counterpartyParticipant = $protocol->participants->firstWhere('is_initiator', false);
+        $canSign = in_array($protocol->status, [ProtocolStatus::PENDING_COUNTERPARTY, ProtocolStatus::PENDING_SIGNATURES], true)
+            && $initiatorParticipant !== null
+            && ! $initiatorParticipant->hasSigned();
 
         return Inertia::render('Protocol/Show', [
             'protocol' => [
@@ -115,6 +124,9 @@ final class ProtocolController extends Controller
                 'has_entitlement' => $entitlementService->hasEntitlement($user, $requiredAction),
                 'dev_mode_available' => ! app()->environment('production'),
                 'magic_link' => ! app()->environment('production') ? ($protocol->metadata['dev_magic_link'] ?? null) : null,
+                'can_sign' => $canSign,
+                'initiator_signed' => $initiatorParticipant?->hasSigned() ?? false,
+                'counterparty_status_label' => $counterpartyParticipant?->participation_status_label,
                 'property' => [
                     'name' => $protocol->property->name,
                     'full_address' => $protocol->property->full_address,
