@@ -105,12 +105,43 @@ class ProtocolSignHttpTest extends TestCase
             ->firstOrFail();
 
         $this->assertNotNull($acceptance->consent_text_snapshot);
-        $this->assertEquals('landlord-fingerprint', $acceptance->device_fingerprint);
+        // device_fingerprint is varchar(64) = sha256-hex width by design
+        // (M10.6 forensic fix) — the column holds a hash, not a raw prefix.
+        $this->assertEquals(hash('sha256', 'landlord-fingerprint'), $acceptance->device_fingerprint);
         $this->assertNotNull($acceptance->ip_address);
 
         $this->protocol->refresh();
         // Only initiator signed so far — still awaiting the guest.
         $this->assertEquals(ProtocolStatus::PENDING_SIGNATURES, $this->protocol->status);
+    }
+
+    /**
+     * M10.6, step 0: proves the forensic fix — a real (long) UA + fingerprint
+     * survive intact/hashed rather than being lossily truncated to 64 chars.
+     */
+    public function test_long_forensic_values_are_stored_without_truncation(): void
+    {
+        $longUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '.
+            '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 RealisticVendorTail/1.0';
+        $longFingerprint = $longUserAgent.' | 1920x1080 | Europe/Warsaw';
+
+        $this->assertGreaterThan(64, strlen($longUserAgent));
+
+        $response = $this->actingAs($this->landlord)
+            ->withHeaders(['User-Agent' => $longUserAgent])
+            ->post(route('protocols.sign', $this->protocol), [
+                'device_fingerprint' => $longFingerprint,
+            ]);
+
+        $response->assertRedirect(route('protocols.show', $this->protocol));
+
+        $acceptance = Acceptance::where('protocol_id', $this->protocol->id)
+            ->where('accepted_by_role', ParticipantRole::LANDLORD->value)
+            ->firstOrFail();
+
+        $this->assertEquals($longUserAgent, $acceptance->user_agent);
+        $this->assertEquals(64, strlen($acceptance->device_fingerprint));
+        $this->assertEquals(hash('sha256', $longFingerprint), $acceptance->device_fingerprint);
     }
 
     public function test_signing_twice_is_rejected(): void

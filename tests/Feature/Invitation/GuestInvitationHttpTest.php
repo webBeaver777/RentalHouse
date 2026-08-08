@@ -181,9 +181,42 @@ class GuestInvitationHttpTest extends TestCase
             ->firstOrFail();
 
         $this->assertNotNull($acceptance->consent_text_snapshot);
-        $this->assertEquals('test-browser-fingerprint', $acceptance->device_fingerprint);
+        // device_fingerprint is varchar(64) = sha256-hex width by design
+        // (M10.6 forensic fix) — the column holds a hash, not a raw prefix.
+        $this->assertEquals(hash('sha256', 'test-browser-fingerprint'), $acceptance->device_fingerprint);
         $this->assertNotNull($acceptance->ip_address);
         $this->assertNotNull($acceptance->user_agent);
+    }
+
+    /**
+     * M10.6, step 0: proves the forensic fix — a real (long) UA + fingerprint
+     * survive intact/hashed rather than being lossily truncated to 64 chars.
+     */
+    public function test_long_forensic_values_are_stored_without_truncation(): void
+    {
+        $token = $this->inviteGuest();
+
+        $longUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '.
+            '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 RealisticVendorTail/1.0';
+        $longFingerprint = $longUserAgent.' | 2560x1440 | Europe/Warsaw';
+
+        $this->assertGreaterThan(64, strlen($longUserAgent));
+
+        $response = $this->withHeaders(['User-Agent' => $longUserAgent])
+            ->post(route('invitation.sign', $token), [
+                'consent' => true,
+                'device_fingerprint' => $longFingerprint,
+            ]);
+
+        $response->assertRedirect(route('invitation.accept', $token));
+
+        $acceptance = Acceptance::where('protocol_id', $this->protocol->id)
+            ->where('accepted_by_role', ParticipantRole::TENANT->value)
+            ->firstOrFail();
+
+        $this->assertEquals($longUserAgent, $acceptance->user_agent);
+        $this->assertEquals(64, strlen($acceptance->device_fingerprint));
+        $this->assertEquals(hash('sha256', $longFingerprint), $acceptance->device_fingerprint);
     }
 
     public function test_sign_without_consent_is_rejected(): void

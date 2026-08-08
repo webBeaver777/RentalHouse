@@ -200,6 +200,13 @@ function submitSign() {
     signForm.device_fingerprint = buildDeviceFingerprint();
     signForm.post(route('protocols.sign', props.protocol.id), { preserveScroll: true });
 }
+
+/* --- finalize (seal protocol -> completed, generates the frozen PDF) --- */
+const finalizeForm = useForm({});
+
+function submitFinalize() {
+    finalizeForm.post(route('protocols.finalize', props.protocol.id), { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -337,6 +344,50 @@ function submitSign() {
                 </form>
 
                 <p v-else class="text-sm text-slate-500">Podpis niedostępny w bieżącym statusie protokołu.</p>
+            </div>
+
+            <!-- Finalize + frozen document (M10.6) -->
+            <div v-if="protocol.is_completed || protocol.can_finalize" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                <h2 class="text-lg font-bold text-slate-900">Zakończenie protokołu</h2>
+
+                <div v-if="protocol.is_completed" class="space-y-3">
+                    <p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                        Protokół został zakończony i zapieczętowany — struktura i zdjęcia nie mogą być już zmieniane.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <a
+                            v-if="protocol.document_url"
+                            :href="protocol.document_url"
+                            target="_blank"
+                            class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm"
+                        >
+                            Pobierz PDF
+                        </a>
+                        <a
+                            v-if="protocol.qr_url"
+                            :href="protocol.qr_url"
+                            target="_blank"
+                            class="text-sm text-emerald-700 hover:text-emerald-800 underline"
+                        >
+                            Strona weryfikacji (QR)
+                        </a>
+                    </div>
+                    <p v-if="protocol.document_hash" class="text-xs text-slate-400 break-all">Hash dokumentu: {{ protocol.document_hash }}</p>
+                </div>
+
+                <form v-else-if="protocol.can_finalize" @submit.prevent="submitFinalize">
+                    <p class="text-sm text-slate-600 mb-3">
+                        Obie strony podpisały protokół — możesz go zakończyć i wygenerować dokument PDF.
+                    </p>
+                    <p v-if="finalizeForm.errors.finalize" class="mb-2 text-sm text-red-600">{{ finalizeForm.errors.finalize }}</p>
+                    <button
+                        type="submit"
+                        :disabled="finalizeForm.processing"
+                        class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
+                    >
+                        Zakończ protokół
+                    </button>
+                </form>
             </div>
 
             <!-- Rooms -->

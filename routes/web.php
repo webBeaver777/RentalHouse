@@ -6,7 +6,9 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProtocolController;
+use App\Http\Controllers\ProtocolDocumentController;
 use App\Http\Controllers\ProtocolEvidenceController;
+use App\Http\Controllers\ProtocolFinalizeController;
 use App\Http\Controllers\ProtocolItemController;
 use App\Http\Controllers\ProtocolItemPhotoController;
 use App\Http\Controllers\ProtocolRoomController;
@@ -170,6 +172,20 @@ Route::middleware('auth')->group(function (): void {
     */
     Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
         Route::post('/sign', [ProtocolSignController::class, 'store'])->name('sign');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.6, Scenario A slice: finalize a signed check-in (seals it,
+    | generates the frozen PDF — see ProtocolFinalizeController) and
+    | serve that PDF back to the browser (see ProtocolDocumentController).
+    | QR verification itself is unchanged — public routes already exist
+    | above (qr.verify / verify.document).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/finalize', [ProtocolFinalizeController::class, 'store'])->name('finalize');
+        Route::get('/document', [ProtocolDocumentController::class, 'show'])->name('document');
     });
 
     /*

@@ -235,7 +235,7 @@
         @foreach($timeline->take(15) as $event)
         <div class="timeline-item">
             <span class="timeline-time">{{ $event->created_at->format('d.m.Y H:i') }}</span>
-            {{ $event->type->shortLabel() }}
+            {{ $event->event_type->shortLabel() }}
             @if($event->actor_role)
             <span style="color: #666;">({{ $event->actor_role }})</span>
             @endif

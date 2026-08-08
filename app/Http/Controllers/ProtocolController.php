@@ -7,9 +7,12 @@ namespace App\Http\Controllers;
 use App\Modules\Billing\Application\Services\EntitlementService;
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
+use App\Modules\Document\Domain\Enums\DocumentType;
+use App\Modules\Document\Infrastructure\Models\GeneratedDocument;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Property\Infrastructure\Models\Property;
+use App\Modules\Protocol\Application\Actions\FinalizeCheckInAction;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
@@ -31,17 +34,22 @@ use Inertia\Response;
  * + submit-to-counterparty step (mutation lives in ProtocolSubmitController;
  * dev-grant in BillingController). M10.5 extends it with the initiator's
  * own sign status (mutation lives in ProtocolSignController; guest side in
- * GuestInvitationController).
+ * GuestInvitationController). M10.6 extends it with finalize/PDF/QR status
+ * (mutation lives in ProtocolFinalizeController; PDF served by
+ * ProtocolDocumentController; QR verification is the existing public
+ * QrVerificationController, unchanged).
  *
  * Backend (Protocol model, ProtocolType, state machine, ProtocolRoom,
- * ProtocolItem, catalog, Evidence, EntitlementService, SignProtocolAction)
- * is frozen and already covered by ProtocolTest / ProtocolStateMachineTest /
+ * ProtocolItem, catalog, Evidence, EntitlementService, SignProtocolAction,
+ * FinalizeCheckInAction, PdfGenerationService) is frozen and already
+ * covered by ProtocolTest / ProtocolStateMachineTest /
  * AsymmetricStateMachineTest / ProtocolRoomItemTest / EvidenceTest /
  * EvidenceUploadServiceTest / HardGateTest / ParticipantTest /
- * AcceptanceTest — this controller only wires UI + routes, the same shape
- * as PropertyController::store.
+ * AcceptanceTest / DocumentHashFreezeTest / QrVerificationTest — this
+ * controller only wires UI + routes, the same shape as
+ * PropertyController::store.
  *
- * NOT in this slice: finalize, PDF, QR, real email delivery (M10.6+).
+ * NOT in this slice: real email delivery, Scenario B/C/D, B2B (M10.7+).
  */
 final class ProtocolController extends Controller
 {
@@ -87,8 +95,11 @@ final class ProtocolController extends Controller
         return redirect()->route('protocols.show', $protocol);
     }
 
-    public function show(Protocol $protocol, EntitlementService $entitlementService): Response
-    {
+    public function show(
+        Protocol $protocol,
+        EntitlementService $entitlementService,
+        FinalizeCheckInAction $finalizeAction
+    ): Response {
         abort_unless($protocol->created_by_user_id === Auth::id(), 403);
 
         $protocol->loadMissing([
@@ -105,12 +116,18 @@ final class ProtocolController extends Controller
         $user = Auth::user();
         $requiredAction = EntitlementService::getRequiredAction($protocol);
         $isDraft = $protocol->status === ProtocolStatus::DRAFT;
+        $isCompleted = $protocol->status === ProtocolStatus::COMPLETED;
 
         $initiatorParticipant = $protocol->participants->firstWhere('user_id', $user->id);
         $counterpartyParticipant = $protocol->participants->firstWhere('is_initiator', false);
         $canSign = in_array($protocol->status, [ProtocolStatus::PENDING_COUNTERPARTY, ProtocolStatus::PENDING_SIGNATURES], true)
             && $initiatorParticipant !== null
             && ! $initiatorParticipant->hasSigned();
+        $canFinalize = ! $isCompleted && $finalizeAction->canFinalize($protocol);
+
+        $document = $isCompleted
+            ? GeneratedDocument::forProtocol($protocol)->ofType(DocumentType::PROTOCOL_PDF)->latestVersion()->first()
+            : null;
 
         return Inertia::render('Protocol/Show', [
             'protocol' => [
@@ -127,6 +144,12 @@ final class ProtocolController extends Controller
                 'can_sign' => $canSign,
                 'initiator_signed' => $initiatorParticipant?->hasSigned() ?? false,
                 'counterparty_status_label' => $counterpartyParticipant?->participation_status_label,
+                'is_completed' => $isCompleted,
+                'completed_at' => $protocol->completed_at?->toIso8601String(),
+                'can_finalize' => $canFinalize,
+                'document_hash' => $protocol->document_hash,
+                'document_url' => $document !== null ? route('protocols.document', $protocol->id) : null,
+                'qr_url' => $protocol->document_hash !== null ? route('qr.verify', ['hash' => $protocol->document_hash]) : null,
                 'property' => [
                     'name' => $protocol->property->name,
                     'full_address' => $protocol->property->full_address,

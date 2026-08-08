@@ -28,8 +28,10 @@ parameters:
         # them. Now that the imports are correct, PHPStan reports the
         # ignore as unused — leaving it in would silently re-mask any
         # future recurrence of the same mistake.
-        # DomPDF facade
-        - '#Call to static method loadView\(\) on an unknown class Barryvdh\\DomPDF\\Facade\\Pdf#'
+        # M10.6: removed the '#...unknown class Barryvdh\DomPDF\Facade\Pdf#'
+        # ignore added while barryvdh/laravel-dompdf wasn't installed yet —
+        # now that it is, PHPStan resolves the class fine and flags the
+        # ignore as unused.
         # Nullsafe on relations (false positive)
         - '#Using nullsafe property access.*on left side of \?\? is unnecessary#'
         # SoftDeletes scope on Builder

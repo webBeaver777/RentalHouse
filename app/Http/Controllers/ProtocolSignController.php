@@ -33,12 +33,16 @@ final class ProtocolSignController extends Controller
 
         /** @var Participant $participant */
 
-        // acceptances.user_agent AND acceptances.device_fingerprint are both
-        // varchar(64) in the frozen schema — real browser UA strings (and a
-        // fingerprint built from one) run well past that. Truncate at the
-        // wiring layer rather than touch the migration or the frozen action.
-        $userAgent = mb_substr((string) $request->userAgent(), 0, 64);
-        $deviceFingerprint = mb_substr((string) $request->input('device_fingerprint'), 0, 64);
+        // acceptances.user_agent is varchar(255) — cap defensively at the
+        // column width, but store the real value (M10.6 forensic fix: an
+        // earlier mb_substr(...,0,64) here was wrong and lost real data).
+        // acceptances.device_fingerprint is varchar(64) — that width is the
+        // hex length of sha256, i.e. the column is designed to hold a HASH
+        // of the client fingerprint, not a truncated prefix of it. Hash it
+        // here rather than truncate.
+        $userAgent = mb_substr((string) $request->userAgent(), 0, 255);
+        $rawFingerprint = (string) $request->input('device_fingerprint');
+        $deviceFingerprint = $rawFingerprint !== '' ? hash('sha256', $rawFingerprint) : null;
 
         try {
             DB::transaction(function () use ($protocol, $participant, $signAction, $request, $userAgent, $deviceFingerprint): void {
