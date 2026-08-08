@@ -62,6 +62,26 @@ return [
             'report' => false,
         ],
 
+        // M10.3: Evidence module (App\Modules\Evidence\Application\Services\EvidenceUploadService)
+        // stores under disk name 'minio' — S3-compatible, EU-hosted, same shape as prod R2.
+        // Uses the internal container endpoint (AWS_ENDPOINT=http://minio:9000) for all
+        // server-side reads/writes; the browser never talks to this endpoint directly —
+        // files are streamed to the browser through ProtocolEvidenceController instead
+        // (a signed/temporary URL generated with the internal endpoint would embed a host
+        // the browser can't resolve and would fail signature verification).
+        'minio' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => env('AWS_BUCKET'),
+            'url' => env('AWS_URL'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

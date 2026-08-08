@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
+use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Property\Infrastructure\Models\Property;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
@@ -22,15 +23,18 @@ use Inertia\Response;
  * M10.1, Scenario A slice: check-in protocol creation entry point from
  * an existing property. M10.2 extends show() with rooms/items + catalog
  * pickers (mutations live in ProtocolRoomController/ProtocolItemController).
+ * M10.3 extends it further with per-item photo evidence (mutations live in
+ * ProtocolItemPhotoController, serving in ProtocolEvidenceController).
  *
  * Backend (Protocol model, ProtocolType, state machine, ProtocolRoom,
- * ProtocolItem, catalog) is frozen and already covered by ProtocolTest /
- * ProtocolStateMachineTest / AsymmetricStateMachineTest / ProtocolRoomItemTest
- * — this controller only wires UI + routes, the same shape as
+ * ProtocolItem, catalog, Evidence) is frozen and already covered by
+ * ProtocolTest / ProtocolStateMachineTest / AsymmetricStateMachineTest /
+ * ProtocolRoomItemTest / EvidenceTest / EvidenceUploadServiceTest — this
+ * controller only wires UI + routes, the same shape as
  * PropertyController::store.
  *
- * NOT in this slice: photos, payment/gate, submit to counterparty,
- * signatures, finalize, PDF, magic-link (M10.3-M10.5).
+ * NOT in this slice: payment/gate, submit to counterparty, signatures,
+ * finalize, PDF, magic-link (M10.4-M10.5).
  */
 final class ProtocolController extends Controller
 {
@@ -86,6 +90,7 @@ final class ProtocolController extends Controller
             'rooms.catalogItem',
             'rooms.items.catalogItem',
             'rooms.items.condition',
+            'rooms.items.photos',
         ]);
 
         return Inertia::render('Protocol/Show', [
@@ -116,6 +121,12 @@ final class ProtocolController extends Controller
                         'condition_name' => $item->condition_name,
                         'custom_name' => $item->custom_name,
                         'quantity' => $item->quantity,
+                        'photos' => $item->photos->map(fn (Evidence $photo) => [
+                            'id' => $photo->id,
+                            'url' => route('protocols.evidence.show', [$protocol->id, $photo->id]),
+                            'original_filename' => $photo->original_filename,
+                            'human_size' => $photo->human_size,
+                        ])->values()->all(),
                     ])->values()->all(),
                 ])->values()->all(),
             ],

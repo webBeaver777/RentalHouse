@@ -122,6 +122,42 @@ function deleteItem(room, item) {
         preserveScroll: true,
     });
 }
+
+/* --- photos --- */
+const photoForm = useForm({ photo: null });
+const uploadingItemId = ref(null);
+const photoErrorItemId = ref(null);
+
+function onPhotoSelected(event, room, item) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    photoForm.clearErrors();
+    photoForm.photo = file;
+    uploadingItemId.value = item.id;
+    photoErrorItemId.value = null;
+
+    photoForm.post(route('protocols.rooms.items.photos.store', [props.protocol.id, room.id, item.id]), {
+        preserveScroll: true,
+        forceFormData: true,
+        onError: () => {
+            photoErrorItemId.value = item.id;
+        },
+        onSuccess: () => {
+            photoForm.reset();
+        },
+        onFinish: () => {
+            uploadingItemId.value = null;
+            event.target.value = '';
+        },
+    });
+}
+
+function deletePhoto(room, item, photo) {
+    router.delete(route('protocols.rooms.items.photos.destroy', [props.protocol.id, room.id, item.id, photo.id]), {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
@@ -278,17 +314,57 @@ function deleteItem(room, item) {
                                     <button type="button" @click="cancelEditItem" class="text-sm text-slate-500 hover:text-slate-700">Anuluj</button>
                                 </div>
                             </form>
-                            <div v-else class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-medium text-slate-900">
-                                        {{ item.display_name }}
-                                        <span v-if="item.quantity > 1" class="text-slate-400 font-normal">&times;{{ item.quantity }}</span>
-                                    </p>
-                                    <p v-if="item.condition_name" class="text-xs text-slate-500">{{ item.condition_name }}</p>
+                            <div v-else>
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-medium text-slate-900">
+                                            {{ item.display_name }}
+                                            <span v-if="item.quantity > 1" class="text-slate-400 font-normal">&times;{{ item.quantity }}</span>
+                                        </p>
+                                        <p v-if="item.condition_name" class="text-xs text-slate-500">{{ item.condition_name }}</p>
+                                    </div>
+                                    <div v-if="protocol.is_draft" class="flex items-center gap-3 shrink-0">
+                                        <button type="button" @click="startEditItem(item)" class="text-sm text-slate-500 hover:text-slate-700">Edytuj</button>
+                                        <button type="button" @click="deleteItem(room, item)" class="text-sm text-red-600 hover:text-red-700">Usuń</button>
+                                    </div>
                                 </div>
-                                <div v-if="protocol.is_draft" class="flex items-center gap-3 shrink-0">
-                                    <button type="button" @click="startEditItem(item)" class="text-sm text-slate-500 hover:text-slate-700">Edytuj</button>
-                                    <button type="button" @click="deleteItem(room, item)" class="text-sm text-red-600 hover:text-red-700">Usuń</button>
+
+                                <div class="mt-3">
+                                    <div v-if="item.photos.length" class="flex flex-wrap gap-2">
+                                        <div v-for="photo in item.photos" :key="photo.id" class="relative">
+                                            <img
+                                                :src="photo.url"
+                                                :alt="photo.original_filename"
+                                                class="w-16 h-16 object-cover rounded-lg border border-slate-200"
+                                            />
+                                            <button
+                                                v-if="protocol.is_draft"
+                                                type="button"
+                                                @click="deletePhoto(room, item, photo)"
+                                                title="Usuń zdjęcie"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none flex items-center justify-center hover:bg-red-700"
+                                            >
+                                                &times;
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="protocol.is_draft" class="mt-2">
+                                        <label class="inline-block text-xs text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer">
+                                            <span v-if="uploadingItemId === item.id">Przesyłanie...</span>
+                                            <span v-else>+ Dodaj zdjęcie</span>
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp,image/heic"
+                                                class="hidden"
+                                                :disabled="uploadingItemId === item.id"
+                                                @change="onPhotoSelected($event, room, item)"
+                                            />
+                                        </label>
+                                        <p v-if="photoErrorItemId === item.id && photoForm.errors.photo" class="mt-1 text-xs text-red-600">
+                                            {{ photoForm.errors.photo }}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

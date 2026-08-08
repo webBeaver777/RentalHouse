@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProtocolController;
+use App\Http\Controllers\ProtocolEvidenceController;
 use App\Http\Controllers\ProtocolItemController;
+use App\Http\Controllers\ProtocolItemPhotoController;
 use App\Http\Controllers\ProtocolRoomController;
 use App\Modules\Document\Application\Controllers\QrVerificationController;
 use Illuminate\Support\Facades\Route;
@@ -122,6 +124,24 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/rooms/{room}/items', [ProtocolItemController::class, 'store'])->name('rooms.items.store');
         Route::put('/rooms/{room}/items/{item}', [ProtocolItemController::class, 'update'])->name('rooms.items.update');
         Route::delete('/rooms/{room}/items/{item}', [ProtocolItemController::class, 'destroy'])->name('rooms.items.destroy');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M10.3, Scenario A slice: photo evidence for items on a draft
+    | check-in protocol. Upload/delete go through EvidenceUploadService
+    | only (SHA-256 hash + MinIO), draft-only + initiator guard. The
+    | evidence.show route proxies the file from MinIO's internal
+    | endpoint to the browser (see ProtocolEvidenceController).
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::get('/evidence/{evidence}', [ProtocolEvidenceController::class, 'show'])->name('evidence.show');
+
+        Route::post('/rooms/{room}/items/{item}/photos', [ProtocolItemPhotoController::class, 'store'])
+            ->name('rooms.items.photos.store');
+        Route::delete('/rooms/{room}/items/{item}/photos/{evidence}', [ProtocolItemPhotoController::class, 'destroy'])
+            ->name('rooms.items.photos.destroy');
     });
 
     /*
