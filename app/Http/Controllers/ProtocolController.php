@@ -11,6 +11,8 @@ use App\Modules\Document\Domain\Enums\DocumentType;
 use App\Modules\Document\Infrastructure\Models\GeneratedDocument;
 use App\Modules\Evidence\Infrastructure\Models\Evidence;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Participation\Domain\Enums\ParticipantRole;
+use App\Modules\Property\Domain\Enums\DeclarationType;
 use App\Modules\Property\Infrastructure\Models\Property;
 use App\Modules\Protocol\Application\Actions\FinalizeCheckInAction;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
@@ -49,7 +51,15 @@ use Inertia\Response;
  * controller only wires UI + routes, the same shape as
  * PropertyController::store.
  *
- * NOT in this slice: real email delivery, Scenario B/C/D, B2B (M10.7+).
+ * M11 extends it with the tenant-initiated role-flip: initiator/counterparty
+ * role is already computed from the property's declaration_type by
+ * ProtocolSubmitController (unchanged since M10.4) — this controller only
+ * mirrors that same computation to label the draft-stage "send" field
+ * correctly, and splits the single finalize flag into bilateral/unilateral
+ * so the right one shows (see ProtocolFinalizeController for the
+ * legal_mode wiring that makes the PDF/QR page reflect which one ran).
+ *
+ * NOT in this slice: real email delivery, Scenario C/D, B2B (M11+).
  */
 final class ProtocolController extends Controller
 {
@@ -123,7 +133,33 @@ final class ProtocolController extends Controller
         $canSign = in_array($protocol->status, [ProtocolStatus::PENDING_COUNTERPARTY, ProtocolStatus::PENDING_SIGNATURES], true)
             && $initiatorParticipant !== null
             && ! $initiatorParticipant->hasSigned();
-        $canFinalize = ! $isCompleted && $finalizeAction->canFinalize($protocol);
+
+        // M11: exactly one finalize action should be offered at a time —
+        // bilateral once the counterparty has actually signed, unilateral
+        // (Scenario B fallback) only while that hasn't happened yet. Both
+        // flags come straight from the frozen FinalizeCheckInAction::canFinalize()
+        // (allowUnilateral true/false) — no gate logic invented here.
+        //
+        // Guard 2: unilateral is only offered when the initiator is the
+        // TENANT. PdfTemplateType::fromProtocol() only has a distinct
+        // unilateral template for tenant-initiated check-ins — a
+        // landlord-initiated unilateral finalize would still render via
+        // BILATERAL_CHECKIN (the only landlord-side template that exists),
+        // i.e. an unlabelled unilateral document indistinguishable from a
+        // real bilateral one. Rather than let that happen, this action
+        // stays scoped to the case it was actually built (and templated) for.
+        $canFinalizeBilateral = ! $isCompleted && $finalizeAction->canFinalize($protocol, false);
+        $canFinalizeUnilateral = ! $isCompleted
+            && ! $canFinalizeBilateral
+            && $protocol->initiator_role === ParticipantRole::TENANT
+            && $finalizeAction->canFinalize($protocol, true);
+
+        // M11: same role-flip ProtocolSubmitController already computes at
+        // submit time (property.declaration_type) — mirrored here purely to
+        // label the draft-stage "send" field correctly before submit exists.
+        $expectedCounterpartyRole = $protocol->property->declaration_type === DeclarationType::OWNER
+            ? ParticipantRole::TENANT
+            : ParticipantRole::LANDLORD;
 
         $document = $isCompleted
             ? GeneratedDocument::forProtocol($protocol)->ofType(DocumentType::PROTOCOL_PDF)->latestVersion()->first()
@@ -146,7 +182,11 @@ final class ProtocolController extends Controller
                 'counterparty_status_label' => $counterpartyParticipant?->participation_status_label,
                 'is_completed' => $isCompleted,
                 'completed_at' => $protocol->completed_at?->toIso8601String(),
-                'can_finalize' => $canFinalize,
+                'can_finalize_bilateral' => $canFinalizeBilateral,
+                'can_finalize_unilateral' => $canFinalizeUnilateral,
+                'legal_mode_label' => $protocol->legal_mode?->label(),
+                'is_unilateral_notice' => $isCompleted && $protocol->legal_mode !== null && ! $protocol->legal_mode->requiresBothSignatures(),
+                'counterparty_role_label' => $expectedCounterpartyRole->label(),
                 'document_hash' => $protocol->document_hash,
                 'document_url' => $document !== null ? route('protocols.document', $protocol->id) : null,
                 'qr_url' => $protocol->document_hash !== null ? route('qr.verify', ['hash' => $protocol->document_hash]) : null,

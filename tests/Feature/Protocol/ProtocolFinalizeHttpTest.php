@@ -11,12 +11,14 @@ use App\Modules\Billing\Infrastructure\Models\EntitlementUsage;
 use App\Modules\Catalog\Domain\Enums\CatalogItemType;
 use App\Modules\Catalog\Infrastructure\Models\CatalogItem;
 use App\Modules\Document\Domain\Enums\DocumentType;
+use App\Modules\Document\Domain\Enums\PdfTemplateType;
 use App\Modules\Document\Infrastructure\Models\GeneratedDocument;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Participation\Application\Services\InvitationService;
 use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Property\Domain\Enums\DeclarationType;
 use App\Modules\Property\Infrastructure\Models\Property;
+use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
@@ -181,12 +183,17 @@ class ProtocolFinalizeHttpTest extends TestCase
         $this->protocol->refresh();
         $this->assertNotNull($this->protocol->document_hash);
 
+        // M11 gap fix: legal_mode is now set at finalize time (previously
+        // never set by any frozen code — see ProtocolFinalizeController).
+        $this->assertEquals(LegalMode::BILATERAL_COMPLETED, $this->protocol->legal_mode);
+
         $document = GeneratedDocument::where('protocol_id', $this->protocol->id)
             ->where('type', DocumentType::PROTOCOL_PDF)
             ->firstOrFail();
 
         $this->assertEquals($this->protocol->document_hash, $document->hash);
         $this->assertGreaterThan(0, $document->size);
+        $this->assertEquals(PdfTemplateType::BILATERAL_CHECKIN->value, $document->template_type);
     }
 
     /* --- document download --- */

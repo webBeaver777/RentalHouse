@@ -7,7 +7,9 @@ namespace App\Http\Controllers;
 use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
 use App\Modules\Document\Application\Services\PdfGenerationService;
 use App\Modules\Identity\Infrastructure\Models\User;
+use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Protocol\Application\Actions\FinalizeCheckInAction;
+use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Exceptions\ProtocolFinalizationException;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +25,23 @@ use Illuminate\Validation\ValidationException;
  * PdfGenerationService::getOrGenerateProtocolPdf (freezes document_hash on
  * first generation, returns the existing document on repeat calls) — no
  * new gate/state logic here.
+ *
+ * M11, Scenario B: also wires the unilateral fallback that
+ * FinalizeCheckInAction already supports (allowUnilateral=true, tested by
+ * ScenarioBTest::can_finalize_unilateral_when_allowed) — a request flag,
+ * not a new gate. Guard 2: which outcome actually happens is still decided
+ * entirely by the frozen action's own validate() (counterparty signed or
+ * not) — this controller never forces bilateral to look unilateral or vice
+ * versa.
+ *
+ * legal_mode wiring (M11 gap fix, applies to A too): neither
+ * FinalizeCheckInAction nor any other frozen code ever sets
+ * Protocol::legal_mode — PdfTemplateType::fromProtocol() and
+ * QrVerificationController both read it, so without this the PDF template
+ * picker falls through to initiator_role-based guessing and the QR page
+ * shows no legal-mode label. Set here, at the one true "this just became
+ * bilateral/unilateral" moment, using the existing LegalMode enum — no new
+ * enum values, no new rule.
  *
  * Entitlement double-consume note: FinalizeCheckInAction's own hard-gate
  * calls EntitlementService::consumeEntitlement() for the SAME
@@ -44,14 +63,41 @@ final class ProtocolFinalizeController extends Controller
     ): RedirectResponse {
         abort_unless($protocol->created_by_user_id === Auth::id(), 403);
 
+        $requestedUnilateral = $request->boolean('unilateral');
+
+        // Guard 2 (server-side, not just UI): if the counterparty has
+        // already signed, this IS a bilateral protocol no matter what the
+        // request says — never let a stray/misused `unilateral=true` label
+        // a genuinely two-signature protocol as unilateral. This is the
+        // "don't cut corners while bilateral is still possible" rule from
+        // CLAUDE.md, enforced here rather than trusted from the client.
+        $counterpartySigned = $protocol->counterparty()?->hasSigned() ?? false;
+        $allowUnilateral = $requestedUnilateral && ! $counterpartySigned;
+
+        // Guard 2 (server-side, not just UI): unilateral finalize only
+        // renders correctly for a tenant-initiated protocol —
+        // PdfTemplateType::fromProtocol() has no distinct unilateral
+        // template for a landlord initiator, so it would silently fall
+        // back to BILATERAL_CHECKIN and produce an unlabelled unilateral
+        // document indistinguishable from a real bilateral one. Reject
+        // rather than produce that artifact.
+        if ($allowUnilateral) {
+            abort_unless($protocol->initiator_role === ParticipantRole::TENANT, 422, 'Zakończenie jednostronne jest dostępne tylko dla protokołów inicjowanych przez najemcę.');
+        }
+
         /** @var User $user */
         $user = Auth::user();
         $ipAddress = $request->ip();
         $userAgent = mb_substr((string) $request->userAgent(), 0, 255);
 
         try {
-            DB::transaction(function () use ($protocol, $finalizeAction, $pdfService, $user, $ipAddress, $userAgent): void {
-                $completed = $finalizeAction->execute($protocol, false, $ipAddress, $userAgent);
+            DB::transaction(function () use ($protocol, $finalizeAction, $pdfService, $user, $ipAddress, $userAgent, $allowUnilateral): void {
+                $protocol->legal_mode = $allowUnilateral
+                    ? LegalMode::UNILATERAL_TENANT
+                    : LegalMode::BILATERAL_COMPLETED;
+                $protocol->save();
+
+                $completed = $finalizeAction->execute($protocol, $allowUnilateral, $ipAddress, $userAgent);
 
                 $pdfService->getOrGenerateProtocolPdf($completed, $user, 'pl', $ipAddress, $userAgent);
             });
@@ -60,6 +106,8 @@ final class ProtocolFinalizeController extends Controller
         }
 
         return redirect()->route('protocols.show', $protocol)
-            ->with('status', 'Protokół został zakończony.');
+            ->with('status', $allowUnilateral
+                ? 'Protokół został zakończony jednostronnie.'
+                : 'Protokół został zakończony.');
     }
 }

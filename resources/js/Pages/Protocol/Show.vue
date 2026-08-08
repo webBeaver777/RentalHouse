@@ -202,10 +202,22 @@ function submitSign() {
 }
 
 /* --- finalize (seal protocol -> completed, generates the frozen PDF) --- */
-const finalizeForm = useForm({});
+const finalizeForm = useForm({ unilateral: false });
+const unilateralConfirmed = ref(false);
 
 function submitFinalize() {
+    finalizeForm.unilateral = false;
     finalizeForm.post(route('protocols.finalize', props.protocol.id), { preserveScroll: true });
+}
+
+function submitFinalizeUnilateral() {
+    finalizeForm.unilateral = true;
+    finalizeForm.post(route('protocols.finalize', props.protocol.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            unilateralConfirmed.value = false;
+        },
+    });
 }
 </script>
 
@@ -288,12 +300,14 @@ function submitFinalize() {
                     </button>
 
                     <form v-else @submit.prevent="submitToCounterparty" class="space-y-2 mt-2">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">E-mail drugiej strony</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            E-mail drugiej strony ({{ protocol.counterparty_role_label }})
+                        </label>
                         <input
                             v-model="submitForm.counterparty_email"
                             type="email"
                             required
-                            placeholder="np. najemca@example.com"
+                            :placeholder="`np. ${protocol.counterparty_role_label.toLowerCase()}@example.com`"
                             class="w-full rounded-lg border border-slate-300 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                         <p v-if="submitForm.errors.counterparty_email" class="text-sm text-red-600">{{ submitForm.errors.counterparty_email }}</p>
@@ -346,13 +360,23 @@ function submitFinalize() {
                 <p v-else class="text-sm text-slate-500">Podpis niedostępny w bieżącym statusie protokołu.</p>
             </div>
 
-            <!-- Finalize + frozen document (M10.6) -->
-            <div v-if="protocol.is_completed || protocol.can_finalize" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <!-- Finalize + frozen document (M10.6, unilateral fallback M11) -->
+            <div
+                v-if="protocol.is_completed || protocol.can_finalize_bilateral || protocol.can_finalize_unilateral"
+                class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+            >
                 <h2 class="text-lg font-bold text-slate-900">Zakończenie protokołu</h2>
 
                 <div v-if="protocol.is_completed" class="space-y-3">
-                    <p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
-                        Protokół został zakończony i zapieczętowany — struktura i zdjęcia nie mogą być już zmieniane.
+                    <p
+                        v-if="protocol.is_unilateral_notice"
+                        class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2"
+                    >
+                        Protokół został zakończony <strong>jednostronnie</strong> ({{ protocol.legal_mode_label }}) —
+                        druga strona nie podpisała. To NIE jest dokument dwustronny — struktura i zdjęcia nie mogą być już zmieniane.
+                    </p>
+                    <p v-else class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                        Protokół został zakończony i zapieczętowany ({{ protocol.legal_mode_label }}) — struktura i zdjęcia nie mogą być już zmieniane.
                     </p>
                     <div class="flex flex-wrap items-center gap-4">
                         <a
@@ -375,7 +399,7 @@ function submitFinalize() {
                     <p v-if="protocol.document_hash" class="text-xs text-slate-400 break-all">Hash dokumentu: {{ protocol.document_hash }}</p>
                 </div>
 
-                <form v-else-if="protocol.can_finalize" @submit.prevent="submitFinalize">
+                <form v-else-if="protocol.can_finalize_bilateral" @submit.prevent="submitFinalize">
                     <p class="text-sm text-slate-600 mb-3">
                         Obie strony podpisały protokół — możesz go zakończyć i wygenerować dokument PDF.
                     </p>
@@ -386,6 +410,29 @@ function submitFinalize() {
                         class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
                     >
                         Zakończ protokół
+                    </button>
+                </form>
+
+                <!-- M11 Scenario B: unilateral fallback — druga strona (zazwyczaj
+                     wynajmujący) nie podpisała. Wymaga jawnej zgody, żeby nie
+                     "ściąć rogu" tam, gdzie podpis dwustronny wciąż jest możliwy. -->
+                <form v-else-if="protocol.can_finalize_unilateral" @submit.prevent="submitFinalizeUnilateral" class="space-y-3">
+                    <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                        Druga strona ({{ protocol.counterparty_role_label }}) jeszcze nie podpisała protokołu.
+                        Możesz zakończyć go <strong>jednostronnie</strong> — dokument będzie wyraźnie oznaczony jako
+                        jednostronny, NIE jako pełny protokół dwustronny.
+                    </p>
+                    <label class="flex items-start gap-2 text-sm text-slate-700">
+                        <input v-model="unilateralConfirmed" type="checkbox" class="mt-0.5 rounded border-slate-300 text-amber-500 focus:ring-amber-500" />
+                        <span>Rozumiem, że to jednostronne zakończenie protokołu bez podpisu drugiej strony.</span>
+                    </label>
+                    <p v-if="finalizeForm.errors.finalize" class="text-sm text-red-600">{{ finalizeForm.errors.finalize }}</p>
+                    <button
+                        type="submit"
+                        :disabled="finalizeForm.processing || !unilateralConfirmed"
+                        class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium text-sm disabled:opacity-50"
+                    >
+                        Zakończ jednostronnie
                     </button>
                 </form>
             </div>
