@@ -219,6 +219,13 @@ function submitFinalizeUnilateral() {
         },
     });
 }
+
+/* --- M12 Scenario C: create a check-out from a completed check-in --- */
+const checkoutForm = useForm({});
+
+function submitCreateCheckout() {
+    checkoutForm.post(route('protocols.checkout.store', props.protocol.id), { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -267,10 +274,46 @@ function submitFinalizeUnilateral() {
                     <dt class="text-sm text-slate-500">Druga strona</dt>
                     <dd class="text-sm font-medium text-slate-900">{{ protocol.counterparty_status_label }}</dd>
                 </div>
+                <div v-if="protocol.linked_checkin" class="p-5 flex items-center justify-between gap-4">
+                    <dt class="text-sm text-slate-500">Wjazd referencyjny (baseline)</dt>
+                    <dd class="text-sm font-medium text-slate-900 text-right">{{ protocol.linked_checkin.title }}</dd>
+                </div>
             </dl>
 
+            <!-- M12 Scenario C: create/link check-out from a completed check-in -->
+            <div
+                v-if="protocol.is_check_in && protocol.is_completed && (protocol.can_create_checkout || protocol.checkout_url)"
+                class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+            >
+                <h2 class="text-lg font-bold text-slate-900">Protokół wyjazdu</h2>
+
+                <template v-if="protocol.checkout_url">
+                    <p class="text-sm text-slate-600">Dla tego wjazdu istnieje już protokół wyjazdu.</p>
+                    <Link
+                        :href="protocol.checkout_url"
+                        class="inline-block px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm"
+                    >
+                        Przejdź do protokołu wyjazdu
+                    </Link>
+                </template>
+                <template v-else>
+                    <p class="text-sm text-slate-600 mb-1">
+                        Rozpocznij wyprowadzenie — stan i zdjęcia z tego wjazdu zostaną użyte jako punkt odniesienia (było/stało).
+                    </p>
+                    <form @submit.prevent="submitCreateCheckout">
+                        <button
+                            type="submit"
+                            :disabled="checkoutForm.processing"
+                            class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
+                        >
+                            Utwórz protokół wyjazdu
+                        </button>
+                    </form>
+                </template>
+            </div>
+
             <!-- Payment + submit to counterparty -->
-            <div v-if="protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div v-if="protocol.is_check_in && protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
                 <h2 class="text-lg font-bold text-slate-900">Płatność i wysyłka</h2>
 
                 <div v-if="!protocol.has_entitlement">
@@ -338,7 +381,7 @@ function submitFinalizeUnilateral() {
             </div>
 
             <!-- Sign (after being sent — draft-only send form above no longer applies) -->
-            <div v-if="!protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div v-if="protocol.is_check_in && !protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
                 <h2 class="text-lg font-bold text-slate-900">Podpis</h2>
 
                 <p v-if="protocol.initiator_signed" class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
@@ -360,9 +403,9 @@ function submitFinalizeUnilateral() {
                 <p v-else class="text-sm text-slate-500">Podpis niedostępny w bieżącym statusie protokołu.</p>
             </div>
 
-            <!-- Finalize + frozen document (M10.6, unilateral fallback M11) -->
+            <!-- Finalize + frozen document (M10.6, unilateral fallback M11 — check-in only, see IssueCheckOutAction/C2 for check-out) -->
             <div
-                v-if="protocol.is_completed || protocol.can_finalize_bilateral || protocol.can_finalize_unilateral"
+                v-if="protocol.is_check_in && (protocol.is_completed || protocol.can_finalize_bilateral || protocol.can_finalize_unilateral)"
                 class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
             >
                 <h2 class="text-lg font-bold text-slate-900">Zakończenie protokołu</h2>
@@ -441,7 +484,7 @@ function submitFinalizeUnilateral() {
             <div class="mt-8 flex items-center justify-between gap-3">
                 <h2 class="text-lg font-bold text-slate-900">Pomieszczenia</h2>
                 <button
-                    v-if="protocol.is_draft && !addRoomOpen"
+                    v-if="protocol.is_check_in && protocol.is_draft && !addRoomOpen"
                     type="button"
                     @click="addRoomOpen = true"
                     class="px-3.5 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm whitespace-nowrap"
@@ -449,9 +492,12 @@ function submitFinalizeUnilateral() {
                     + Dodaj pomieszczenie
                 </button>
             </div>
+            <p v-if="protocol.is_check_out" class="mt-1 text-xs text-slate-500">
+                Struktura pomieszczeń i pozycji pochodzi z protokołu wjazdu — dla każdej pozycji wprowadź stan aktualny (stało) obok stanu z wjazdu (było).
+            </p>
 
             <form
-                v-if="addRoomOpen"
+                v-if="protocol.is_check_in && addRoomOpen"
                 @submit.prevent="submitAddRoom"
                 class="mt-3 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
             >
@@ -488,8 +534,11 @@ function submitFinalizeUnilateral() {
                 </div>
             </form>
 
-            <p v-if="protocol.rooms.length === 0 && !addRoomOpen" class="mt-3 text-sm text-slate-500">
+            <p v-if="protocol.rooms.length === 0 && !addRoomOpen && protocol.is_check_in" class="mt-3 text-sm text-slate-500">
                 Brak pomieszczeń. Dodaj pierwsze powyżej.
+            </p>
+            <p v-if="protocol.rooms.length === 0 && protocol.is_check_out" class="mt-3 text-sm text-slate-500">
+                Wjazd referencyjny nie miał pomieszczeń — brak pozycji do porównania.
             </p>
 
             <div class="mt-4 space-y-4">
@@ -515,7 +564,7 @@ function submitFinalizeUnilateral() {
                         </form>
                         <template v-else>
                             <p class="font-medium text-slate-900">{{ room.display_name }}</p>
-                            <div v-if="protocol.is_draft" class="flex items-center gap-3 shrink-0">
+                            <div v-if="protocol.is_check_in && protocol.is_draft" class="flex items-center gap-3 shrink-0">
                                 <button type="button" @click="startEditRoom(room)" class="text-sm text-slate-500 hover:text-slate-700">Edytuj</button>
                                 <button type="button" @click="deleteRoom(room)" class="text-sm text-red-600 hover:text-red-700">Usuń</button>
                             </div>
@@ -559,12 +608,39 @@ function submitFinalizeUnilateral() {
                                         <p class="text-sm font-medium text-slate-900">
                                             {{ item.display_name }}
                                             <span v-if="item.quantity > 1" class="text-slate-400 font-normal">&times;{{ item.quantity }}</span>
+                                            <span
+                                                v-if="item.comparison_status === 'changed'"
+                                                class="ml-1 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full align-middle"
+                                            >
+                                                zmieniono
+                                            </span>
+                                            <span
+                                                v-else-if="item.comparison_status === 'unassessed'"
+                                                class="ml-1 text-xs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full align-middle"
+                                            >
+                                                nieocenione
+                                            </span>
                                         </p>
                                         <p v-if="item.condition_name" class="text-xs text-slate-500">{{ item.condition_name }}</p>
                                     </div>
                                     <div v-if="protocol.is_draft" class="flex items-center gap-3 shrink-0">
                                         <button type="button" @click="startEditItem(item)" class="text-sm text-slate-500 hover:text-slate-700">Edytuj</button>
-                                        <button type="button" @click="deleteItem(room, item)" class="text-sm text-red-600 hover:text-red-700">Usuń</button>
+                                        <button v-if="protocol.is_check_in" type="button" @click="deleteItem(room, item)" class="text-sm text-red-600 hover:text-red-700">Usuń</button>
+                                    </div>
+                                </div>
+
+                                <!-- M12 Scenario C: "było" (baseline z wjazdu) obok "stało" -->
+                                <div v-if="item.baseline" class="mt-2 p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Było (wjazd)</p>
+                                    <p class="text-xs text-slate-600">{{ item.baseline.condition_name ?? 'Bez stanu' }}</p>
+                                    <div v-if="item.baseline.photos.length" class="mt-1 flex flex-wrap gap-1.5">
+                                        <img
+                                            v-for="photo in item.baseline.photos"
+                                            :key="photo.id"
+                                            :src="photo.url"
+                                            :alt="photo.original_filename"
+                                            class="w-12 h-12 object-cover rounded border border-slate-200"
+                                        />
                                     </div>
                                 </div>
 
@@ -612,7 +688,7 @@ function submitFinalizeUnilateral() {
                             Brak pozycji w tym pomieszczeniu.
                         </p>
 
-                        <form v-if="addItemRoomId === room.id" @submit.prevent="submitAddItem(room)" class="p-4 bg-slate-50 space-y-2">
+                        <form v-if="protocol.is_check_in && addItemRoomId === room.id" @submit.prevent="submitAddItem(room)" class="p-4 bg-slate-50 space-y-2">
                             <div class="grid grid-cols-2 gap-2">
                                 <select
                                     v-model="addItemForm.catalog_item_id"
@@ -656,7 +732,7 @@ function submitFinalizeUnilateral() {
                         </form>
 
                         <button
-                            v-if="protocol.is_draft && addItemRoomId !== room.id"
+                            v-if="protocol.is_check_in && protocol.is_draft && addItemRoomId !== room.id"
                             type="button"
                             @click="openAddItem(room)"
                             class="w-full p-3 text-sm text-emerald-600 hover:text-emerald-700 font-medium text-left px-4"

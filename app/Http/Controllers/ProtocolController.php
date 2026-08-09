@@ -59,7 +59,13 @@ use Inertia\Response;
  * so the right one shows (see ProtocolFinalizeController for the
  * legal_mode wiring that makes the PDF/QR page reflect which one ran).
  *
- * NOT in this slice: real email delivery, Scenario C/D, B2B (M11+).
+ * M12 extends it further for Scenario C (check-out): show() now also
+ * renders the "było/stało" baseline comparison per item (baseline_item_id,
+ * populated by ProtocolCheckOutController via the frozen BaselineService)
+ * and offers the "Utwórz protokół wyjazdu" action from a completed check-in.
+ *
+ * NOT in this slice: real email delivery, Scenario D, deposits/act
+ * issuance/finalize for check-out (C2), B2B (M12+).
  */
 final class ProtocolController extends Controller
 {
@@ -119,7 +125,11 @@ final class ProtocolController extends Controller
             'rooms.items.catalogItem',
             'rooms.items.condition',
             'rooms.items.photos',
+            'rooms.items.baselineItem.condition',
+            'rooms.items.baselineItem.photos',
+            'rooms.items.baselineItem.room',
             'participants',
+            'linkedCheckin',
         ]);
 
         /** @var User $user */
@@ -165,6 +175,16 @@ final class ProtocolController extends Controller
             ? GeneratedDocument::forProtocol($protocol)->ofType(DocumentType::PROTOCOL_PDF)->latestVersion()->first()
             : null;
 
+        // M12: check-out creation is only offered from a completed check-in
+        // (guard 2 spirit — a check-out needs a real, sealed baseline, not a
+        // draft one). If one was already created, link to it instead of
+        // allowing a second one for the same check-in.
+        $isCheckIn = $protocol->type === ProtocolType::CHECK_IN;
+        $isCheckOut = $protocol->type === ProtocolType::CHECK_OUT;
+        $existingCheckout = ($isCheckIn && $isCompleted)
+            ? $protocol->linkedCheckouts()->latest()->first()
+            : null;
+
         return Inertia::render('Protocol/Show', [
             'protocol' => [
                 'id' => $protocol->id,
@@ -174,6 +194,14 @@ final class ProtocolController extends Controller
                 'status_label' => $protocol->status->label(),
                 'title' => $protocol->title,
                 'is_draft' => $isDraft,
+                'is_check_in' => $isCheckIn,
+                'is_check_out' => $isCheckOut,
+                'can_create_checkout' => $isCheckIn && $isCompleted && $existingCheckout === null,
+                'checkout_url' => $existingCheckout !== null ? route('protocols.show', $existingCheckout->id) : null,
+                'linked_checkin' => $protocol->linkedCheckin !== null ? [
+                    'id' => $protocol->linkedCheckin->id,
+                    'title' => $protocol->linkedCheckin->title,
+                ] : null,
                 'has_entitlement' => $entitlementService->hasEntitlement($user, $requiredAction),
                 'dev_mode_available' => ! app()->environment('production'),
                 'magic_link' => ! app()->environment('production') ? ($protocol->metadata['dev_magic_link'] ?? null) : null,
@@ -215,6 +243,26 @@ final class ProtocolController extends Controller
                             'original_filename' => $photo->original_filename,
                             'human_size' => $photo->human_size,
                         ])->values()->all(),
+                        // M12, Scenario C: "było" (baseline) alongside "stało"
+                        // (this item) for check-out items linked via
+                        // baseline_item_id (BaselineService::createItemsFromBaseline).
+                        // Baseline photos are served through the CHECK-IN
+                        // protocol's own (unmodified) evidence route — valid
+                        // because the check-out initiator is the same user who
+                        // owns the baseline check-in (see ProtocolCheckOutController).
+                        'baseline' => $item->baselineItem !== null ? [
+                            'condition_name' => $item->baselineItem->condition_name,
+                            'photos' => $item->baselineItem->photos->map(fn (Evidence $photo) => [
+                                'id' => $photo->id,
+                                'url' => route('protocols.evidence.show', [$item->baselineItem->room->protocol_id, $photo->id]),
+                                'original_filename' => $photo->original_filename,
+                            ])->values()->all(),
+                        ] : null,
+                        'comparison_status' => $item->baselineItem === null ? null : match (true) {
+                            $item->condition_catalog_item_id === null => 'unassessed',
+                            $item->condition_catalog_item_id === $item->baselineItem->condition_catalog_item_id => 'unchanged',
+                            default => 'changed',
+                        },
                     ])->values()->all(),
                 ])->values()->all(),
             ],

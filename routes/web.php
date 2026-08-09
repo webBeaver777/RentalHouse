@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\ProtocolCheckOutController;
 use App\Http\Controllers\ProtocolController;
 use App\Http\Controllers\ProtocolDocumentController;
 use App\Http\Controllers\ProtocolEvidenceController;
@@ -186,6 +187,17 @@ Route::middleware('auth')->group(function (): void {
     Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
         Route::post('/finalize', [ProtocolFinalizeController::class, 'store'])->name('finalize');
         Route::get('/document', [ProtocolDocumentController::class, 'show'])->name('document');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M12, Scenario C slice 1: create a check-out linked to a completed
+    | check-in as baseline (see ProtocolCheckOutController). {protocol}
+    | here is the CHECK-IN protocol being used as the baseline source.
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/check-out', [ProtocolCheckOutController::class, 'store'])->name('checkout.store');
     });
 
     /*
