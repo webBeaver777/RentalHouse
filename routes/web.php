@@ -7,9 +7,12 @@ use App\Http\Controllers\GuestInvitationController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProtocolCheckOutController;
 use App\Http\Controllers\ProtocolController;
+use App\Http\Controllers\ProtocolDefectController;
+use App\Http\Controllers\ProtocolDepositController;
 use App\Http\Controllers\ProtocolDocumentController;
 use App\Http\Controllers\ProtocolEvidenceController;
 use App\Http\Controllers\ProtocolFinalizeController;
+use App\Http\Controllers\ProtocolIssueCheckOutController;
 use App\Http\Controllers\ProtocolItemController;
 use App\Http\Controllers\ProtocolItemPhotoController;
 use App\Http\Controllers\ProtocolRoomController;
@@ -198,6 +201,35 @@ Route::middleware('auth')->group(function (): void {
     */
     Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
         Route::post('/check-out', [ProtocolCheckOutController::class, 'store'])->name('checkout.store');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M13 step 1, Scenario C slice 2: deposit amount + per-item
+    | withholdings (potrącenia) on a check-out draft (draft-only +
+    | initiator guard — see AuthorizesDraftProtocolMutation). Wires
+    | existing Protocol::deposit_amount / ProtocolDefect — no new model.
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::put('/deposit', [ProtocolDepositController::class, 'update'])->name('deposit.update');
+
+        Route::post('/rooms/{room}/items/{item}/defects', [ProtocolDefectController::class, 'store'])
+            ->name('rooms.items.defects.store');
+        Route::delete('/rooms/{room}/items/{item}/defects/{defect}', [ProtocolDefectController::class, 'destroy'])
+            ->name('rooms.items.defects.destroy');
+    });
+
+    /*
+    |----------------------------------------------------------------
+    | M13 step 3, Scenario C slice 2: "Wydaj akt" — issue the one-sided
+    | check-out act (see ProtocolIssueCheckOutController). One acceptance
+    | (the initiator's) is sufficient — Guard 1/11, no counterparty
+    | signature required.
+    |----------------------------------------------------------------
+    */
+    Route::prefix('protocols/{protocol}')->name('protocols.')->group(function (): void {
+        Route::post('/issue', [ProtocolIssueCheckOutController::class, 'store'])->name('checkout.issue');
     });
 
     /*

@@ -9,7 +9,6 @@ use App\Modules\Document\Application\Services\PdfGenerationService;
 use App\Modules\Identity\Infrastructure\Models\User;
 use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Protocol\Application\Actions\FinalizeCheckInAction;
-use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Exceptions\ProtocolFinalizationException;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
 use Illuminate\Http\RedirectResponse;
@@ -34,14 +33,12 @@ use Illuminate\Validation\ValidationException;
  * not) — this controller never forces bilateral to look unilateral or vice
  * versa.
  *
- * legal_mode wiring (M11 gap fix, applies to A too): neither
- * FinalizeCheckInAction nor any other frozen code ever sets
- * Protocol::legal_mode — PdfTemplateType::fromProtocol() and
- * QrVerificationController both read it, so without this the PDF template
- * picker falls through to initiator_role-based guessing and the QR page
- * shows no legal-mode label. Set here, at the one true "this just became
- * bilateral/unilateral" moment, using the existing LegalMode enum — no new
- * enum values, no new rule.
+ * legal_mode (M13 step 0): determined inside FinalizeCheckInAction itself
+ * now, from the actual fact of signatures/role — not set here. This
+ * controller only decides allowUnilateral (the request flag, Guard-2'd
+ * against a counterparty that already signed) and passes it through;
+ * PdfTemplateType::fromProtocol() and QrVerificationController read the
+ * domain-set value.
  *
  * Entitlement double-consume note: FinalizeCheckInAction's own hard-gate
  * calls EntitlementService::consumeEntitlement() for the SAME
@@ -92,11 +89,6 @@ final class ProtocolFinalizeController extends Controller
 
         try {
             DB::transaction(function () use ($protocol, $finalizeAction, $pdfService, $user, $ipAddress, $userAgent, $allowUnilateral): void {
-                $protocol->legal_mode = $allowUnilateral
-                    ? LegalMode::UNILATERAL_TENANT
-                    : LegalMode::BILATERAL_COMPLETED;
-                $protocol->save();
-
                 $completed = $finalizeAction->execute($protocol, $allowUnilateral, $ipAddress, $userAgent);
 
                 $pdfService->getOrGenerateProtocolPdf($completed, $user, 'pl', $ipAddress, $userAgent);

@@ -18,6 +18,7 @@ use App\Modules\Protocol\Application\Actions\FinalizeCheckInAction;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Infrastructure\Models\Protocol;
+use App\Modules\Protocol\Infrastructure\Models\ProtocolDefect;
 use App\Modules\Protocol\Infrastructure\Models\ProtocolItem;
 use App\Modules\Protocol\Infrastructure\Models\ProtocolRoom;
 use Illuminate\Http\RedirectResponse;
@@ -64,8 +65,14 @@ use Inertia\Response;
  * populated by ProtocolCheckOutController via the frozen BaselineService)
  * and offers the "Utwórz protokół wyjazdu" action from a completed check-in.
  *
- * NOT in this slice: real email delivery, Scenario D, deposits/act
- * issuance/finalize for check-out (C2), B2B (M12+).
+ * M13 (Scenario C slice 2) extends show() further with the check-out
+ * draft's deposit/withholdings state (mutations live in
+ * ProtocolDepositController/ProtocolDefectController) and one-sided act
+ * issuance status (mutation lives in ProtocolIssueCheckOutController, which
+ * wires the frozen IssueCheckOutAction).
+ *
+ * NOT in this slice: real email delivery, Scenario D, guest objection
+ * reception (C3), B2B (M12+).
  */
 final class ProtocolController extends Controller
 {
@@ -128,6 +135,7 @@ final class ProtocolController extends Controller
             'rooms.items.baselineItem.condition',
             'rooms.items.baselineItem.photos',
             'rooms.items.baselineItem.room',
+            'defects',
             'participants',
             'linkedCheckin',
         ]);
@@ -185,6 +193,14 @@ final class ProtocolController extends Controller
             ? $protocol->linkedCheckouts()->latest()->first()
             : null;
 
+        // M13 step 1/3, Scenario C slice 2: withholdings (potrącenia) grouped
+        // per item, and the act-issuance state. Wires the existing
+        // deposit/defects tracking (Protocol::defects()/getTotalDamageCostAttribute()/
+        // getAmountToReturnAttribute()) and IssueCheckOutAction's fields
+        // (act_issued_at, objection_window_ends_at) — no new model.
+        $defectsByItem = $protocol->defects->groupBy('protocol_item_id');
+        $canIssueCheckoutAct = $isCheckOut && $isDraft;
+
         return Inertia::render('Protocol/Show', [
             'protocol' => [
                 'id' => $protocol->id,
@@ -218,6 +234,23 @@ final class ProtocolController extends Controller
                 'document_hash' => $protocol->document_hash,
                 'document_url' => $document !== null ? route('protocols.document', $protocol->id) : null,
                 'qr_url' => $protocol->document_hash !== null ? route('qr.verify', ['hash' => $protocol->document_hash]) : null,
+                // M13, Scenario C slice 2: payment product code differs by
+                // protocol type (WJAZD for check-in, WYJAZD for check-out) —
+                // same billing.dev-grant endpoint, existing entitlement gate.
+                'payment_product_code' => $isCheckIn ? 'WJAZD' : 'WYJAZD',
+                // M13 step 1, deposit/withholdings — draft-only, initiator only.
+                'deposit_amount' => $protocol->deposit_amount !== null ? (float) $protocol->deposit_amount : null,
+                'total_damage_cost' => $isCheckOut ? $protocol->total_damage_cost : null,
+                'amount_to_return' => $isCheckOut ? $protocol->amount_to_return : null,
+                // M13 step 3, "Wydaj akt" — one-sided act issuance state.
+                'can_issue_checkout_act' => $canIssueCheckoutAct,
+                'act_issued_at' => $protocol->act_issued_at?->toIso8601String(),
+                'objection_window_ends_at' => $protocol->objection_window_ends_at?->toIso8601String(),
+                'is_objection_window_open' => $protocol->isObjectionWindowOpen(),
+                'objection_window_remaining_hours' => $protocol->remainingObjectionHours(),
+                // Second party on a check-out never signs (Guard 1/11) — only
+                // ever "notified / objection window", never "podpisano".
+                'checkout_counterparty_notified' => $isCheckOut && $counterpartyParticipant !== null,
                 'property' => [
                     'name' => $protocol->property->name,
                     'full_address' => $protocol->property->full_address,
@@ -263,6 +296,17 @@ final class ProtocolController extends Controller
                             $item->condition_catalog_item_id === $item->baselineItem->condition_catalog_item_id => 'unchanged',
                             default => 'changed',
                         },
+                        // M13 step 1: withholdings (potrącenia) recorded
+                        // against this item (ProtocolDefect, see
+                        // ProtocolDefectController) — summed into
+                        // total_damage_cost/amount_to_return above.
+                        'defects' => $defectsByItem->has($item->id)
+                            ? $defectsByItem->get($item->id)->map(fn (ProtocolDefect $defect): array => [
+                                'id' => $defect->id,
+                                'title' => $defect->title,
+                                'estimated_cost' => (float) $defect->estimated_cost,
+                            ])->values()->all()
+                            : [],
                     ])->values()->all(),
                 ])->values()->all(),
             ],

@@ -7,7 +7,9 @@ namespace App\Modules\Protocol\Application\Actions;
 use App\Modules\Billing\Application\Services\EntitlementService;
 use App\Modules\Billing\Domain\Enums\AllowedAction;
 use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
+use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Domain\Exceptions\ProtocolFinalizationException;
@@ -62,6 +64,20 @@ final class FinalizeCheckInAction
                 $userAgent
             );
         }
+
+        // legal_mode (M13 step 0: moved here from ProtocolFinalizeController,
+        // the one true "this just became bilateral/unilateral" moment lives
+        // in the domain now, not in wiring). Determined by the actual fact
+        // of signatures, not the caller's allowUnilateral request: bilateral
+        // only when a counterparty exists and has genuinely signed; unilateral
+        // otherwise, labelled by the initiator's own role. Existing LegalMode
+        // cases only, no new rule.
+        $counterparty = $protocol->counterparty();
+        $protocol->legal_mode = ($counterparty && $counterparty->hasSigned())
+            ? LegalMode::BILATERAL_COMPLETED
+            : ($initiator?->role === ParticipantRole::LANDLORD
+                ? LegalMode::UNILATERAL_LANDLORD
+                : LegalMode::UNILATERAL_TENANT);
 
         $protocol->completed_at = now();
         $protocol->status = ProtocolStatus::COMPLETED;

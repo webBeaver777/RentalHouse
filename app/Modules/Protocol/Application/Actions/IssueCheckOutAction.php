@@ -7,7 +7,9 @@ namespace App\Modules\Protocol\Application\Actions;
 use App\Modules\Billing\Application\Services\EntitlementService;
 use App\Modules\Billing\Domain\Enums\AllowedAction;
 use App\Modules\Billing\Domain\Exceptions\EntitlementRequiredException;
+use App\Modules\Participation\Domain\Enums\ParticipantRole;
 use App\Modules\Protocol\Domain\Enums\InspectionEventType;
+use App\Modules\Protocol\Domain\Enums\LegalMode;
 use App\Modules\Protocol\Domain\Enums\ProtocolStatus;
 use App\Modules\Protocol\Domain\Enums\ProtocolType;
 use App\Modules\Protocol\Domain\Exceptions\ProtocolFinalizationException;
@@ -69,6 +71,14 @@ final class IssueCheckOutAction
                 $userAgent
             );
         }
+
+        // legal_mode (M13 step 0, same pattern as FinalizeCheckInAction):
+        // check-out is ALWAYS unilateral (Guard 1/11 — one acceptance issues
+        // the act, the counterparty never blocks it), labelled by the
+        // initiator's own role. Existing LegalMode cases only, no new rule.
+        $protocol->legal_mode = $initiator?->role === ParticipantRole::LANDLORD
+            ? LegalMode::UNILATERAL_LANDLORD
+            : LegalMode::UNILATERAL_TENANT;
 
         $objectionHours = $objectionWindowHours ?? self::DEFAULT_OBJECTION_HOURS;
 

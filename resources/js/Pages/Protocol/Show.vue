@@ -161,11 +161,20 @@ function deletePhoto(room, item, photo) {
 
 /* --- dev payment (stub for real Przelewy24 flow) --- */
 const payForm = useForm({
-    product_code: 'WJAZD',
+    product_code: props.protocol.payment_product_code,
     protocol_id: props.protocol.id,
 });
 
 function submitPay() {
+    // M13 fix: this component instance is reused (no remount) when Inertia
+    // navigates in-page from a check-in to the check-out it just created
+    // (submitCreateCheckout below) — props.protocol changes, but useForm()'s
+    // initial values do not update on their own. Re-read both fields fresh
+    // at submit time rather than trusting the values captured at mount, or
+    // a checkout draft's "Zapłać (dev)" silently pays for the wrong (stale)
+    // protocol/product.
+    payForm.product_code = props.protocol.payment_product_code;
+    payForm.protocol_id = props.protocol.id;
     payForm.post(route('billing.dev-grant'), { preserveScroll: true });
 }
 
@@ -225,6 +234,51 @@ const checkoutForm = useForm({});
 
 function submitCreateCheckout() {
     checkoutForm.post(route('protocols.checkout.store', props.protocol.id), { preserveScroll: true });
+}
+
+/* --- M13 step 1, Scenario C slice 2: deposit amount on a check-out draft --- */
+const depositForm = useForm({ deposit_amount: props.protocol.deposit_amount ?? '' });
+
+function submitDeposit() {
+    depositForm.put(route('protocols.deposit.update', props.protocol.id), { preserveScroll: true });
+}
+
+/* --- M13 step 1: per-item withholdings (potrącenia z kaucji) --- */
+const defectFormItemId = ref(null);
+const defectForm = useForm({ title: '', estimated_cost: '' });
+
+function openAddDefect(item) {
+    defectForm.reset();
+    defectFormItemId.value = item.id;
+}
+
+function cancelAddDefect() {
+    defectFormItemId.value = null;
+}
+
+function submitAddDefect(room, item) {
+    defectForm.post(route('protocols.rooms.items.defects.store', [props.protocol.id, room.id, item.id]), {
+        preserveScroll: true,
+        onSuccess: () => {
+            defectForm.reset();
+            defectFormItemId.value = null;
+        },
+    });
+}
+
+function deleteDefect(room, item, defect) {
+    router.delete(route('protocols.rooms.items.defects.destroy', [props.protocol.id, room.id, item.id, defect.id]), {
+        preserveScroll: true,
+    });
+}
+
+/* --- M13 step 3: "Wydaj akt" — one-sided check-out act issuance
+     (IssueCheckOutAction: one acceptance, the initiator's, is enough —
+     Guard 1/11, no counterparty signature required). --- */
+const issueForm = useForm({});
+
+function submitIssueAct() {
+    issueForm.post(route('protocols.checkout.issue', props.protocol.id), { preserveScroll: true });
 }
 </script>
 
@@ -480,6 +534,109 @@ function submitCreateCheckout() {
                 </form>
             </div>
 
+            <!-- M13, Scenario C slice 2: check-out draft — deposit, withholdings, payment, issue act -->
+            <div v-if="protocol.is_check_out && protocol.is_draft" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                <h2 class="text-lg font-bold text-slate-900">Kaucja i wydanie aktu</h2>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Kwota kaucji (PLN)</label>
+                    <form @submit.prevent="submitDeposit" class="flex items-center gap-2">
+                        <input
+                            v-model="depositForm.deposit_amount"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <button
+                            type="submit"
+                            :disabled="depositForm.processing"
+                            class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm disabled:opacity-50"
+                        >
+                            Zapisz
+                        </button>
+                    </form>
+                    <p v-if="depositForm.errors.deposit_amount" class="mt-1 text-sm text-red-600">{{ depositForm.errors.deposit_amount }}</p>
+                </div>
+
+                <div v-if="protocol.deposit_amount !== null" class="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 space-y-1">
+                    <p>Kaucja: <strong>{{ protocol.deposit_amount.toFixed(2) }} PLN</strong></p>
+                    <p>Potrącenia łącznie: <strong>{{ (protocol.total_damage_cost ?? 0).toFixed(2) }} PLN</strong></p>
+                    <p>Do zwrotu: <strong>{{ (protocol.amount_to_return ?? 0).toFixed(2) }} PLN</strong></p>
+                </div>
+
+                <div v-if="!protocol.has_entitlement">
+                    <p class="text-sm text-slate-600 mb-2">Wydanie aktu wymaga opłaty.</p>
+                    <form v-if="protocol.dev_mode_available" @submit.prevent="submitPay">
+                        <button
+                            type="submit"
+                            :disabled="payForm.processing"
+                            class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium text-sm disabled:opacity-50"
+                        >
+                            Zapłać (dev)
+                        </button>
+                    </form>
+                </div>
+                <p v-else class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                    Dostęp opłacony — możesz wydać akt.
+                </p>
+
+                <form @submit.prevent="submitIssueAct" class="pt-3 border-t border-slate-100">
+                    <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-3">
+                        Akt wyjazdu jest dokumentem <strong>jednostronnym</strong> — do jego wydania wystarczy Twoja
+                        akceptacja jako inicjatora. Druga strona zostanie powiadomiona (magic-link) i będzie mieć czas
+                        na zgłoszenie sprzeciwu (okno 72h), ale jej podpis NIE jest wymagany do wydania aktu.
+                    </p>
+                    <p v-if="issueForm.errors.issue" class="mb-2 text-sm text-red-600">{{ issueForm.errors.issue }}</p>
+                    <button
+                        type="submit"
+                        :disabled="issueForm.processing"
+                        class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium text-sm disabled:opacity-50"
+                    >
+                        Wydaj akt
+                    </button>
+                </form>
+            </div>
+
+            <!-- M13 step 3: check-out act already issued -->
+            <div v-if="protocol.is_check_out && protocol.is_completed" class="mt-6 bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                <h2 class="text-lg font-bold text-slate-900">Akt wyjazdu</h2>
+
+                <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                    Akt został wydany <strong>jednostronnie</strong> ({{ protocol.legal_mode_label }}) — wystarczyła
+                    akceptacja inicjatora. Druga strona:
+                    <strong>{{ protocol.checkout_counterparty_notified ? 'Powiadomiony — okno sprzeciwu' : 'Brak danych kontaktowych do powiadomienia' }}</strong>
+                    <span v-if="protocol.is_objection_window_open"> (jeszcze {{ protocol.objection_window_remaining_hours }} godz.)</span>
+                    — NIE „Podpisano”.
+                </p>
+
+                <div v-if="protocol.deposit_amount !== null" class="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 space-y-1">
+                    <p>Kaucja: <strong>{{ protocol.deposit_amount.toFixed(2) }} PLN</strong></p>
+                    <p>Potrącenia łącznie: <strong>{{ (protocol.total_damage_cost ?? 0).toFixed(2) }} PLN</strong></p>
+                    <p>Do zwrotu: <strong>{{ (protocol.amount_to_return ?? 0).toFixed(2) }} PLN</strong></p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4">
+                    <a
+                        v-if="protocol.document_url"
+                        :href="protocol.document_url"
+                        target="_blank"
+                        class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm"
+                    >
+                        Pobierz PDF
+                    </a>
+                    <a
+                        v-if="protocol.qr_url"
+                        :href="protocol.qr_url"
+                        target="_blank"
+                        class="text-sm text-emerald-700 hover:text-emerald-800 underline"
+                    >
+                        Strona weryfikacji (QR)
+                    </a>
+                </div>
+                <p v-if="protocol.document_hash" class="text-xs text-slate-400 break-all">Hash dokumentu: {{ protocol.document_hash }}</p>
+            </div>
+
             <!-- Rooms -->
             <div class="mt-8 flex items-center justify-between gap-3">
                 <h2 class="text-lg font-bold text-slate-900">Pomieszczenia</h2>
@@ -642,6 +799,64 @@ function submitCreateCheckout() {
                                             class="w-12 h-12 object-cover rounded border border-slate-200"
                                         />
                                     </div>
+                                </div>
+
+                                <!-- M13 step 1: withholdings (potrącenia z kaucji) against this item -->
+                                <div v-if="protocol.is_check_out" class="mt-2">
+                                    <div v-if="item.defects.length" class="space-y-1 mb-2">
+                                        <div
+                                            v-for="defect in item.defects"
+                                            :key="defect.id"
+                                            class="flex items-center justify-between gap-2 text-xs bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5"
+                                        >
+                                            <span class="text-red-800">{{ defect.title }} — {{ defect.estimated_cost.toFixed(2) }} PLN</span>
+                                            <button
+                                                v-if="protocol.is_draft"
+                                                type="button"
+                                                @click="deleteDefect(room, item, defect)"
+                                                class="text-red-500 hover:text-red-700"
+                                            >
+                                                &times;
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <form
+                                        v-if="protocol.is_draft && defectFormItemId === item.id"
+                                        @submit.prevent="submitAddDefect(room, item)"
+                                        class="flex items-center gap-2"
+                                    >
+                                        <input
+                                            v-model="defectForm.title"
+                                            type="text"
+                                            placeholder="Opis potrącenia"
+                                            required
+                                            class="flex-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        />
+                                        <input
+                                            v-model.number="defectForm.estimated_cost"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            placeholder="PLN"
+                                            required
+                                            class="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        />
+                                        <button type="submit" :disabled="defectForm.processing" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap">
+                                            Dodaj
+                                        </button>
+                                        <button type="button" @click="cancelAddDefect" class="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap">
+                                            Anuluj
+                                        </button>
+                                    </form>
+                                    <button
+                                        v-else-if="protocol.is_draft"
+                                        type="button"
+                                        @click="openAddDefect(item)"
+                                        class="text-xs text-red-600 hover:text-red-700 font-medium"
+                                    >
+                                        + Potrącenie z kaucji
+                                    </button>
                                 </div>
 
                                 <div class="mt-3">

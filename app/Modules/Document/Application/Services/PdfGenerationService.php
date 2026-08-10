@@ -71,7 +71,7 @@ final class PdfGenerationService
             'rooms.items.baselineItem.photos', // For check-out comparison
             'meters',
             'keys',
-            'defects.photos',
+            'defects.evidence',
             'participants.user',
             'linkedCheckIn.rooms.items', // For check-out comparison
         ]);
@@ -380,7 +380,7 @@ final class PdfGenerationService
             'rooms.items.baselineItem.photos',
             'meters',
             'keys',
-            'defects.photos',
+            'defects.evidence',
             'participants.user',
             'linkedCheckIn.rooms.items',
         ]);
